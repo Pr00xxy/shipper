@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+
+import os
+import time
+import subprocess
+import json
+import argparse
+
+parser = argparse.ArgumentParser(description='description')
+parser.add_argument('--revision',
+                    dest='revision',  
+                    action='store',
+                    default=None,
+                    help='(required) accepts a string ID for this revision')
+parser.add_argument('--deploy-dir',  
+                    dest='deploydir',
+                    action='store',
+                    default=os.path.dirname(os.path.realpath(__file__)),
+                    help='Base directory for deployment')
+parser.add_argument('--deploy-cache-dir',  
+                    dest='deploycachedir',
+                    action='store',
+                    default=None,
+                    help='Directory in which the deployed files are initially deploy')
+parser.add_argument('--revisions-to-keep',  
+                    dest='revisionstokeep',
+                    action='store',
+                    type=int,
+                    default=None,
+                    help='number of old revisions to keep in addition to the current revision')
+parser.add_argument('--symlinks',  
+                    dest='symlinks',
+                    action='store',
+                    default=None,
+                    help='a JSON hash of symbolic links to be created in the revision directory (default: {} )')
+
+args = parser.parse_args()
+
+
+class Deployer():
+  
+  quiet = None
+  deployPath = None
+  revisionPath = None
+  errHandler = None
+
+  directories = {
+    'revisions': 'revisions',
+    'shared': 'shared',
+    'config': 'shared/config'
+  }
+  
+  def __init__(self):
+    pass
+
+
+  def run(self, deployDir, deployCacheDir, revision, revisionsToKeep, symLinks):
+    try:
+      
+      self.initDirectories(deployDir)
+      print('Creating atomic deployment directories..')
+
+      self.createRevisionDir(revision)
+      print('Creating new revision directory..')
+     
+      self.copyCacheToRevision(deployCacheDir)
+      print('Copying deploy-cache to new revision directory..')
+      
+      self.createSymlinks(symLinks)
+      print('Creating symlinks within new revision directory..')
+      
+      self.linkCurrentRevision()
+      print('Switching over to latest revision')
+      
+      self.pruneOldRevisions(revisionsToKeep)
+      print('Pruning old revisions')
+
+      result = True
+    except Exception as e:
+      result = False
+
+    # self.cleanUp(result)
+
+    return result
+
+
+  def initDirectories(self, deployDir):
+    if os.path.exists(deployDir) is True:
+      self.deployPath = deployDir.rstrip("/")
+    else:
+      self.deployPath = ''
+
+    if not os.access(deployDir, os.W_OK) is True:
+      raise RuntimeError('The deploy directory ' + deployDir + 'is not writable')
+    
+    if not os.path.isdir(self.directories['revisions']) is True:
+      try:
+        os.mkdir(self.directories['revisions'])
+      except RuntimeError as e: 
+        raise RuntimeError('Could not create revisions directory: ' + repr(e))
+
+    if not os.path.isdir(self.directories['shared']) is True:
+      try:
+        os.mkdir(self.directories['shared'])
+      except RuntimeError as e:
+        raise RuntimeError('Could not create shared directory: ' + repr(e))
+        
+    if not os.path.isdir(self.directories['config']) is True:
+      try:
+        os.makedirs(self.directories['config'])
+      except RuntimeError as e:
+        raise RuntimeError('Could not create revisions directory. ' + repr(e))
+
+  
+  def createRevisionDir(self, revision):
+    self.revisionPath = os.path.join(self.deployPath, self.directories['revisions'], revision)
+    self.revisionPath = self.revisionPath.rstrip("/")
+
+    if os.path.isdir(os.path.realpath(self.revisionPath)):
+      self.revisionPath = self.revisionPath + '-' + time.time()
+
+    if not os.path.isdir(self.revisionPath) is True:
+      try:
+        os.mkdir(self.revisionPath)
+      except RuntimeError as e:
+        raise RuntimeError('Could not create revision directory; ' + self.revisionPath)
+   
+    if not os.access(self.revisionPath, os.W_OK) is True:
+      raise RuntimeError('The revision directory ' + self.revisionPath + 'is not writable')
+
+
+  def copyCacheToRevision(self, deployCacheDir):
+    try:
+      subprocess.check_call(['cp', '-a', deployCacheDir+'/.', self.revisionPath], check=True)
+    except subprocess.CalledProcessError as e:
+       print("Could not copy deploy cache to revision directory" + repr(e))
+
+  
+  def createSymlinks(self, rawJsonString):
+    symLinks = json.loads(rawJsonString)
+    for (k, v) in symLinks.items():
+      t = self.deployPath + "/" + k
+      l = self.revisionPath + "/" + v
+
+      try:
+        self.createSymlink(t, l)
+      except Exception as e:
+        raise Exception("Could not create symlink " + t + " -> " + l + ": " + repr(e))
+
+
+  def createSymlink(self, target, link):
+    try:
+      subprocess.call(['rm', '-rf', link, '&&', 'ln', '-sfn', target, link], check=True)
+    except subprocess.CalledProcessError as e:
+      print("Could not create symlink " + target + " -> " + link + ": " + repr(e))
+
+  
+  def pruneOldRevisions(self, revisionsToKeep):
+    if revisionsToKeep > 0:
+      revisionsDir = self.deployPath + '/' + self.directories['revisions']
+
+      rmIndex = revisionsToKeep + 2
+
+      try:
+        subprocess.check_call("ls -1dtp "+revisionsDir+"/** | tail -n +"+rmIndex+" | tr " + '\'\n\' \'\0\'' + " | xargs -0 rm -rf --", check=True)
+      except subprocess.CalledProcessError as e:
+        print('Could not prune old revisions ' + repr(e))
+
+  
+  def linkCurrentRevision(self):
+    revisionTarget = self.revisionPath
+    currentLink = self.deployPath + '/' + 'current'
+
+    try:
+      self.createSymlink(revisionTarget, currentLink)
+    except Exception as e:
+      raise Exception('Could not create current symlink: ' + repr(e))
+
+deployer = Deployer()
+
+deployer.run(args.deploydir, args.deploycachedir, args.revision, args.revisionstokeep, args.symlinks)
