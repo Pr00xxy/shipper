@@ -5,30 +5,31 @@ import time
 import subprocess
 import json
 import argparse
+from distutils.dir_util import copy_tree
 
 parser = argparse.ArgumentParser(description='description')
 parser.add_argument('--revision',
-                    dest='revision',  
+                    dest='revision',
                     action='store',
                     default=None,
                     help='(required) accepts a string ID for this revision')
-parser.add_argument('--deploy-dir',  
+parser.add_argument('--deploy-dir',
                     dest='deploydir',
                     action='store',
                     default=os.path.dirname(os.path.realpath(__file__)),
                     help='Base directory for deployment')
-parser.add_argument('--deploy-cache-dir',  
+parser.add_argument('--deploy-cache-dir',
                     dest='deploycachedir',
                     action='store',
                     default=None,
                     help='Directory in which the deployed files are initially deploy')
-parser.add_argument('--revisions-to-keep',  
+parser.add_argument('--revisions-to-keep',
                     dest='revisionstokeep',
                     action='store',
                     type=int,
                     default=None,
                     help='number of old revisions to keep in addition to the current revision')
-parser.add_argument('--symlinks',  
+parser.add_argument('--symlinks',
                     dest='symlinks',
                     action='store',
                     default=None,
@@ -38,7 +39,7 @@ args = parser.parse_args()
 
 
 class Deployer():
-  
+
   quiet = None
   deployPath = None
   revisionPath = None
@@ -49,34 +50,34 @@ class Deployer():
     'shared': 'shared',
     'config': 'shared/config'
   }
-  
+
   def __init__(self):
     pass
 
 
   def run(self, deployDir, deployCacheDir, revision, revisionsToKeep, symLinks):
     try:
-      
+
       self.initDirectories(deployDir)
       print('Creating atomic deployment directories..')
 
       self.createRevisionDir(revision)
       print('Creating new revision directory..')
-     
+
       self.copyCacheToRevision(deployCacheDir)
       print('Copying deploy-cache to new revision directory..')
-      
+
       self.createSymlinks(symLinks)
       print('Creating symlinks within new revision directory..')
-      
+
       self.linkCurrentRevision()
       print('Switching over to latest revision')
-      
+
       self.pruneOldRevisions(revisionsToKeep)
       print('Pruning old revisions')
 
       result = True
-    except Exception as e:
+    except Exception:
       result = False
 
     # self.cleanUp(result)
@@ -92,11 +93,11 @@ class Deployer():
 
     if not os.access(deployDir, os.W_OK) is True:
       raise RuntimeError('The deploy directory ' + deployDir + 'is not writable')
-    
+
     if not os.path.isdir(self.directories['revisions']) is True:
       try:
         os.mkdir(self.directories['revisions'])
-      except RuntimeError as e: 
+      except RuntimeError as e:
         raise RuntimeError('Could not create revisions directory: ' + repr(e))
 
     if not os.path.isdir(self.directories['shared']) is True:
@@ -104,14 +105,14 @@ class Deployer():
         os.mkdir(self.directories['shared'])
       except RuntimeError as e:
         raise RuntimeError('Could not create shared directory: ' + repr(e))
-        
+
     if not os.path.isdir(self.directories['config']) is True:
       try:
         os.makedirs(self.directories['config'])
       except RuntimeError as e:
         raise RuntimeError('Could not create revisions directory. ' + repr(e))
 
-  
+
   def createRevisionDir(self, revision):
     self.revisionPath = os.path.join(self.deployPath, self.directories['revisions'], revision)
     self.revisionPath = self.revisionPath.rstrip("/")
@@ -122,23 +123,30 @@ class Deployer():
     if not os.path.isdir(self.revisionPath) is True:
       try:
         os.mkdir(self.revisionPath)
-      except RuntimeError as e:
+      except RuntimeError:
         raise RuntimeError('Could not create revision directory; ' + self.revisionPath)
-   
+
     if not os.access(self.revisionPath, os.W_OK) is True:
       raise RuntimeError('The revision directory ' + self.revisionPath + 'is not writable')
 
 
   def copyCacheToRevision(self, deployCacheDir):
     try:
-      subprocess.check_call(['cp', '-a', deployCacheDir+'/.', self.revisionPath], check=True)
+      if os.path.isdir(deployCacheDir) is True:
+        copy_tree(deployCacheDir, self.revisionPath)
     except subprocess.CalledProcessError as e:
        print("Could not copy deploy cache to revision directory" + repr(e))
 
-  
+
   def createSymlinks(self, rawJsonString):
+
+    if rawJsonString is None:
+      return
+
     symLinks = json.loads(rawJsonString)
+
     for (k, v) in symLinks.items():
+      print(1)
       t = self.deployPath + "/" + k
       l = self.revisionPath + "/" + v
 
@@ -149,12 +157,15 @@ class Deployer():
 
 
   def createSymlink(self, target, link):
+    if os.path.exists(link):
+      subprocess.call('rm -rf ' + link)
+
     try:
-      subprocess.call(['rm', '-rf', link, '&&', 'ln', '-sfn', target, link], check=True)
-    except subprocess.CalledProcessError as e:
+      os.symlink(target,link)
+    except Exception as e:
       print("Could not create symlink " + target + " -> " + link + ": " + repr(e))
 
-  
+
   def pruneOldRevisions(self, revisionsToKeep):
     if revisionsToKeep > 0:
       revisionsDir = self.deployPath + '/' + self.directories['revisions']
@@ -166,15 +177,14 @@ class Deployer():
       except subprocess.CalledProcessError as e:
         print('Could not prune old revisions ' + repr(e))
 
-  
+
   def linkCurrentRevision(self):
     revisionTarget = self.revisionPath
     currentLink = self.deployPath + '/' + 'current'
-
     try:
       self.createSymlink(revisionTarget, currentLink)
     except Exception as e:
-      raise Exception('Could not create current symlink: ' + repr(e))
+      print('Could not create current symlink: ' + repr(e))
 
 deployer = Deployer()
 
