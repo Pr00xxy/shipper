@@ -5,7 +5,9 @@ import time
 import subprocess
 import json
 import argparse
+import yaml
 from distutils.dir_util import copy_tree
+from importlib import import_module
 
 parser = argparse.ArgumentParser(description='description')
 parser.add_argument('--revision',
@@ -40,10 +42,8 @@ args = parser.parse_args()
 
 class Deployer():
 
-  quiet = None
   deployPath = None
   revisionPath = None
-  errHandler = None
 
   directories = {
     'revisions': 'revisions',
@@ -55,11 +55,13 @@ class Deployer():
     pass
 
 
-  def run(self, deployDir, deployCacheDir, revision, revisionsToKeep, symLinks):
+  def run(self, deployDir, deployCacheDir, revision, revisionsToKeep, symLinks, pluginPath):
     try:
 
       self.initDirectories(deployDir)
       print('Creating atomic deployment directories..')
+
+      self.dispatchEvent('after:initDirectories', pluginPath)
 
       self.createRevisionDir(revision)
       print('Creating new revision directory..')
@@ -79,8 +81,6 @@ class Deployer():
       result = True
     except Exception:
       result = False
-
-    # self.cleanUp(result)
 
     return result
 
@@ -156,6 +156,37 @@ class Deployer():
         raise Exception("Could not create symlink " + t + " -> " + l + ": " + repr(e))
 
 
+  def dispatchEvent(self, eventName, pluginPath):
+    with open('plugin.yml', 'r') as ymlfile:
+      yml = yaml.load(ymlfile)
+
+    if not eventName in yml:
+      return
+
+    if not 'path' in eventName:
+      print('Missing \'path\' parameter in event: ' + eventName )
+
+    path = yml[eventName]['path']
+
+    className = path.split(' ')[1].split('/')[0]
+    moduleName = path.split(' ')[0].replace("/", ".")
+
+    plugin = __import__(moduleName)
+    try:
+      pluginClass = getattr(plugin, className)
+    except AttributeError:
+      print('Failed retrieving plugin class: ' + className)
+      return False
+
+    for functionName in yml[eventName]['execute']:
+          try:
+              functionObject = getattr(pluginClass, functionName)
+              functionObject()
+          except AttributeError:
+              print('Failed retrieving plugin class function: ' + functionName)
+              return False
+
+
   def createSymlink(self, target, link):
     if os.path.exists(link):
       subprocess.call('rm -rf ' + link)
@@ -188,4 +219,4 @@ class Deployer():
 
 deployer = Deployer()
 
-deployer.run(args.deploydir, args.deploycachedir, args.revision, args.revisionstokeep, args.symlinks)
+deployer.run(args.deploydir, args.deploycachedir, args.revision, args.revisionstokeep, args.symlinks, args.plugin)
