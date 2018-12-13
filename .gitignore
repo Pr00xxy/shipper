@@ -1,0 +1,9 @@
+**/.vscode
+**/plugin.yml
+**/__pycache__
+**/revisions/
+**/cache/
+**/share/
+**/current
+**/plugin/
+**/symlinks.json
