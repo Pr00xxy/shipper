@@ -41,7 +41,7 @@ parser.add_argument('--symlinks',
 parser.add_argument('--plugin',
                     dest='plugin',
                     action='store',
-                    default='plugin.yml',
+                    default=os.path.dirname(os.path.realpath(__file__)) + '/plugin.yml',
                     help='file path to the plugin file (default: plugin.yml)')
 
 args = parser.parse_args()
@@ -91,8 +91,8 @@ class Deployer():
       self.dispatchEvent('after:linkCurrentRevision', pluginPath)
       # -------------------------------------------------------------
       self.dispatchEvent('before:pruneOldRevisions', pluginPath)
-      print('Pruning old revisions')
-      self.pruneOldRevisions(revisionsToKeep)
+      print('Purging old revisions')
+      self.purgeOldRevisions(revisionsToKeep)
       self.dispatchEvent('after:pruneOldRevisions', pluginPath)
       # -------------------------------------------------------------
 
@@ -155,23 +155,24 @@ class Deployer():
 
 
   def copyCacheToRevision(self, deployCacheDir):
-    try:
-      if os.path.isdir(deployCacheDir) is True:
+    if os.path.isdir(deployCacheDir) is True:
+      try:
+        print('Copying deploy cache to revision directory')
         copy_tree(deployCacheDir, self.revisionPath)
-    except subprocess.CalledProcessError as e:
-       print('Could not copy deploy cache to revision directory' + repr(e))
+      except subprocess.CalledProcessError as e:
+        print('Could not copy deploy cache to revision directory' + repr(e))
 
 
   def createSymlinks(self, rawJsonString):
 
-    if os.path.isfile(rawJsonString) is True:
+    if os.path.isfile(self.deployPath + '/' + rawJsonString) is True:
       print('Json is file')
       try:
         with open(rawJsonString, 'r') as fh:
           symLinks = json.load(fh)
       except Exception as e:
-          print('Failed reading json data: ' + repr(e))
-          return
+        print('Failed reading json data: ' + repr(e))
+        return
     else:
       print('Json is string')
       try:
@@ -192,7 +193,6 @@ class Deployer():
 
 
   def dispatchEvent(self, eventName, pluginPath):
-
     try:
       with open(pluginPath, 'r') as ymlfile:
         yml = yaml.load(ymlfile)
@@ -230,12 +230,18 @@ class Deployer():
       os.unlink(link)
 
     try:
+      if os.path.isfile(link) is True:
+        print('deleting file')
+        os.remove(link)
+      if os.path.isdir(link) is True:
+        print('removing dir')
+        shutil.rmtree(link)
       os.symlink(target,link)
     except Exception as e:
       print('Could not create symlink ' + target + ' -> ' + link + ': ' + repr(e))
 
 
-  def pruneOldRevisions(self, revisionsToKeep):
+  def purgeOldRevisions(self, revisionsToKeep):
     if revisionsToKeep > 0:
       revisionsDir = self.deployPath + '/' + self.directories['revisions']
 
