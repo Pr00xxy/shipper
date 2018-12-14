@@ -165,8 +165,7 @@ class Deployer():
 
   def createSymlinks(self, rawJsonString):
 
-    if os.path.isfile(self.deployPath + '/' + rawJsonString) is True:
-      print('Json is file')
+    if os.path.isfile(rawJsonString) is True:
       try:
         with open(rawJsonString, 'r') as fh:
           symLinks = json.load(fh)
@@ -174,7 +173,6 @@ class Deployer():
         print('Failed reading json data: ' + repr(e))
         return
     else:
-      print('Json is string')
       try:
         symLinks = json.loads(rawJsonString)
       except Exception as e:
@@ -216,7 +214,10 @@ class Deployer():
         return False
 
       try:
-        classObject = getattr(moduleObject, className)()
+        classObject = getattr(moduleObject, className)(
+          self.deployPath,
+          self.revisionPath
+          )
         functionObject = getattr(classObject, functionName)
       except AttributeError as e:
         print('AttributeError: ' + repr(e))
@@ -231,10 +232,8 @@ class Deployer():
 
     try:
       if os.path.isfile(link) is True:
-        print('deleting file')
         os.remove(link)
       if os.path.isdir(link) is True:
-        print('removing dir')
         shutil.rmtree(link)
       os.symlink(target,link)
     except Exception as e:
