@@ -58,42 +58,42 @@ class Deployer():
     'config': 'share/config',
   }
 
-  def __init__(self):
-    pass
+  def __init__(self, pluginpath=''):
+    self.pluginPath = pluginpath
 
-  def run(self, deployDir, deployCacheDir, revision, revisionsToKeep, symLinks, pluginPath):
+  def run(self, deployDir, deployCacheDir, revision, revisionsToKeep, symLinks):
     try:
 
       # -------------------------------------------------------------
-      self.dispatchEvent('before:initDirectories', pluginPath)
+      self.dispatchEvent('before:initDirectories')
       print('Creating atomic deployment directories..')
       self.initDirectories(deployDir)
-      self.dispatchEvent('after:initDirectories', pluginPath)
+      self.dispatchEvent('after:initDirectories')
       # -------------------------------------------------------------
-      self.dispatchEvent('before:createRevisionDir', pluginPath)
+      self.dispatchEvent('before:createRevisionDir')
       print('Creating new revision directory..')
       self.createRevisionDir(revision)
-      self.dispatchEvent('after:createRevisionDir', pluginPath)
+      self.dispatchEvent('after:createRevisionDir')
       # -------------------------------------------------------------
-      self.dispatchEvent('before:copyCacheToRevision', pluginPath)
+      self.dispatchEvent('before:copyCacheToRevision')
       self.copyCacheToRevision(deployCacheDir)
       print('Copying deploy-cache to new revision directory..')
-      self.dispatchEvent('after:copyCacheToRevision', pluginPath)
+      self.dispatchEvent('after:copyCacheToRevision')
       # -------------------------------------------------------------
-      self.dispatchEvent('before:createSymlinks', pluginPath)
+      self.dispatchEvent('before:createSymlinks')
       print('Creating symlinks within new revision directory..')
       self.createSymlinks(symLinks)
-      self.dispatchEvent('after:createSymlinks', pluginPath)
+      self.dispatchEvent('after:createSymlinks')
       # -------------------------------------------------------------
-      self.dispatchEvent('before:linkCurrentRevision', pluginPath)
+      self.dispatchEvent('before:linkCurrentRevision')
       print('Switching over to latest revision')
       self.linkCurrentRevision()
-      self.dispatchEvent('after:linkCurrentRevision', pluginPath)
+      self.dispatchEvent('after:linkCurrentRevision')
       # -------------------------------------------------------------
-      self.dispatchEvent('before:pruneOldRevisions', pluginPath)
+      self.dispatchEvent('before:pruneOldRevisions')
       print('Purging old revisions')
       self.purgeOldRevisions(revisionsToKeep)
-      self.dispatchEvent('after:pruneOldRevisions', pluginPath)
+      self.dispatchEvent('after:pruneOldRevisions')
       # -------------------------------------------------------------
 
       print('Done.')
@@ -190,12 +190,12 @@ class Deployer():
         print('Could not create symlink ' + t + ' -> ' + l + ': ' + repr(e))
 
 
-  def dispatchEvent(self, eventName, pluginPath):
+  def dispatchEvent(self, eventName):
     try:
-      with open(pluginPath, 'r') as ymlfile:
+      with open(self.pluginPath, 'r') as ymlfile:
         yml = yaml.load(ymlfile)
     except Exception as e:
-      print('Failed opening pugin file: ' + pluginPath + ' ' + repr(e))
+      print('Failed opening pugin file: ' + self.pluginPath + ' ' + repr(e))
       return
 
     if not eventName in yml:
@@ -268,13 +268,14 @@ class Deployer():
     except FileNotFoundError as e:
       print(repr(e))
 
-deployer = Deployer()
+deployer = Deployer(
+    pluginpath=args.plugin
+)
 
 deployer.run(
   args.deploydir,
   args.deploycachedir,
   args.revision,
   args.revisionstokeep,
-  args.symlinks,
-  args.plugin
+  args.symlinks
   )
