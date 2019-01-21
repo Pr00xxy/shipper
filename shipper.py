@@ -41,7 +41,7 @@ parser.add_argument('--symlinks',
 parser.add_argument('--plugin',
                     dest='plugin',
                     action='store',
-                    default=os.path.dirname(os.path.realpath(__file__)) + '/plugin.yml',
+                    default='',
                     help='file path to the plugin file (default: plugin.yml)')
 
 args = parser.parse_args()
@@ -92,7 +92,7 @@ class Deployer():
       # -------------------------------------------------------------
       self.dispatchEvent('before:pruneOldRevisions')
       print('Purging old revisions')
-      self.purgeOldRevisions(revisionsToKeep)
+      self.purgeOldRevisions(int(revisionsToKeep))
       self.dispatchEvent('after:pruneOldRevisions')
       # -------------------------------------------------------------
 
@@ -244,20 +244,20 @@ class Deployer():
     if revisionsToKeep > 0:
       revisionsDir = self.deployPath + '/' + self.directories['revisions']
 
-      rmIndex = revisionsToKeep + 2
-
       name_list = os.listdir(revisionsDir)
       full_list = [os.path.join(revisionsDir, i)
                    for i in name_list]
       date_sorted = sorted(full_list, key=os.path.getmtime)
-
       currentDirCount = len(date_sorted)
-      loopCount = currentDirCount - rmIndex
+      loopCount = currentDirCount - revisionsToKeep
 
-      if currentDirCount > rmIndex:
+      if currentDirCount > revisionsToKeep:
         for v in date_sorted[:loopCount]:
-          print('└ ' + v)
-          shutil.rmtree(v)
+          print('* ' + v)
+          try:
+            shutil.rmtree(v)
+          except NotADirectoryError as e:
+            print('Could not delete directory ' + v + ' ' + repr(e))
 
 
   def linkCurrentRevision(self):
