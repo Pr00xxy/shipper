@@ -198,6 +198,8 @@ class Deployer():
     try:
       with open(self.pluginPath, 'r') as ymlfile:
         yml = yaml.load(ymlfile)
+        if yml is None:
+          return
     except Exception as e:
       raise SystemExit('Failed opening pugin file: ' + self.pluginPath + ' ' + repr(e)) from e
 
@@ -239,7 +241,7 @@ class Deployer():
         shutil.rmtree(link)
       os.symlink(target,link)
     except Exception as e:
-      print('Could not create symlink ' + target + ' -> ' + link + ': ' + repr(e))
+      print('Could not create symlink ' + target + ' -> ' + link)
 
 
   def purgeOldRevisions(self, revisionsToKeep):
