@@ -12,37 +12,41 @@ from distutils.dir_util import copy_tree
 from importlib import import_module
 
 parser = argparse.ArgumentParser(description='description')
-parser.add_argument('--revision',
+parser._action_groups.pop()
+required = parser.add_argument_group('required arguments')
+optional = parser.add_argument_group('optional arguments')
+
+required.add_argument('--revision',
                     dest='revision',
                     action='store',
                     default=None,
                     help='(required) accepts a string ID for this revision')
-parser.add_argument('--deploy-dir',
+required.add_argument('--deploy-dir',
                     dest='deploydir',
                     action='store',
                     default=os.path.dirname(os.path.realpath(__file__)),
                     help='Base directory for deployment')
-parser.add_argument('--deploy-cache-dir',
+required.add_argument('--deploy-cache-dir',
                     dest='deploycachedir',
                     action='store',
                     default=None,
                     help='Directory in which the deployed files are initially deploy')
-parser.add_argument('--revisions-to-keep',
+optional.add_argument('--revisions-to-keep',
                     dest='revisionstokeep',
                     action='store',
                     type=int,
                     default=5,
                     help='number of old revisions to keep in addition to the current revision')
-parser.add_argument('--symlinks',
+optional.add_argument('--symlinks',
                     dest='symlinks',
                     action='store',
                     default='{}',
                     help='a JSON hash or filename of symbolic links to be created in the revision directory (default: {} )')
-parser.add_argument('--plugin',
+optional.add_argument('--plugin',
                     dest='plugin',
                     action='store',
-                    default='',
-                    help='file path to the plugin file (default: plugin.yml)')
+                    default=None,
+                    help='file path to the plugin file')
 
 args = parser.parse_args()
 
@@ -58,7 +62,7 @@ class Deployer():
     'config': 'share/config',
   }
 
-  def __init__(self, pluginpath=''):
+  def __init__(self, pluginpath=None):
     self.pluginPath = pluginpath
 
   def run(self, deployDir, deployCacheDir, revision, revisionsToKeep, symLinks):
@@ -92,7 +96,7 @@ class Deployer():
       # -------------------------------------------------------------
       self.dispatchEvent('before:pruneOldRevisions')
       print('Purging old revisions')
-      self.purgeOldRevisions(int(revisionsToKeep))
+      self.purgeOldRevisions(revisionsToKeep)
       self.dispatchEvent('after:pruneOldRevisions')
       # -------------------------------------------------------------
 
@@ -118,19 +122,19 @@ class Deployer():
       try:
         os.mkdir(self.directories['revisions'])
       except RuntimeError as e:
-        print('Could not create revisions directory: ' + repr(e))
+        raise SystemExit('Could not create revisions directory: ' + repr(e)) from e
 
     if not os.path.isdir(self.directories['share']) is True:
       try:
         os.mkdir(self.directories['share'])
       except RuntimeError as e:
-        print('Could not create share directory: ' + repr(e))
+        raise SystemExit('Could not create share directory: ' + repr(e)) from e
 
     if not os.path.isdir(self.directories['config']) is True:
       try:
         os.makedirs(self.directories['config'])
       except RuntimeError as e:
-        print('Could not create revisions directory. ' + repr(e))
+        raise SystemExit('Could not create revisions directory. ' + repr(e)) from e
 
 
   def createRevisionDir(self, revision):
@@ -143,15 +147,13 @@ class Deployer():
     if not os.path.isdir(self.revisionPath) is True:
       try:
         os.mkdir(self.revisionPath)
-      except Exception:
-        print('Could not create revision directory; ' + self.revisionPath)
-        sys.exit(1)
+      except Exception as e:
+        raise SystemExit('Could not create revision directory; ' + self.revisionPath) from e
     else:
-      print('EMERGENCY ABORT: revision directory already exists. Aborting')
-      sys.exit(1)
+      print('Revision directory already exists. Aborting')
 
     if not os.access(self.revisionPath, os.W_OK) is True:
-      print('The revision directory ' + self.revisionPath + 'is not writable')
+      sys.exit('The revision directory ' + self.revisionPath + 'is not writable')
 
 
   def copyCacheToRevision(self, deployCacheDir):
@@ -160,7 +162,7 @@ class Deployer():
         print('Copying deploy cache to revision directory')
         copy_tree(deployCacheDir, self.revisionPath)
       except subprocess.CalledProcessError as e:
-        print('Could not copy deploy cache to revision directory' + repr(e))
+        raise SystemExit('Could not copy deploy cache to revision directory' + repr(e)) from e
 
 
   def createSymlinks(self, rawJsonString):
@@ -183,7 +185,6 @@ class Deployer():
       t = self.deployPath + '/' + k
       l = self.revisionPath + '/' + v
 
-      # try inside here or in target function? ask Ian
       try:
         self.createSymlink(t, l)
       except Exception as e:
@@ -191,12 +192,14 @@ class Deployer():
 
 
   def dispatchEvent(self, eventName):
+    if self.pluginPath is None:
+      return
+
     try:
       with open(self.pluginPath, 'r') as ymlfile:
         yml = yaml.load(ymlfile)
     except Exception as e:
-      print('Failed opening pugin file: ' + self.pluginPath + ' ' + repr(e))
-      return
+      raise SystemExit('Failed opening pugin file: ' + self.pluginPath + ' ' + repr(e)) from e
 
     if not eventName in yml:
       return
@@ -220,8 +223,7 @@ class Deployer():
           )
         functionObject = getattr(classObject, functionName)
       except AttributeError as e:
-        print('AttributeError: ' + repr(e))
-        return False
+        raise SystemExit(repr(e))
 
       functionObject()
 
@@ -255,10 +257,12 @@ class Deployer():
         for v in date_sorted[:loopCount]:
           print('* ' + v)
           try:
-            shutil.rmtree(v)
-          except NotADirectoryError as e:
-            print('Could not delete directory ' + v + ' ' + repr(e))
-
+            if os.path.isdir(v) is True:
+              shutil.rmtree(v)
+            else:
+              print('Not a directory')
+          except (NotADirectoryError, OSError) as e:
+            print(repr(e))
 
   def linkCurrentRevision(self):
     revisionTarget = self.revisionPath
@@ -266,7 +270,7 @@ class Deployer():
     try:
       self.createSymlink(revisionTarget, currentLink)
     except FileNotFoundError as e:
-      print(repr(e))
+      raise SystemExit('Failed creating symlink to current ' + repr(e)) from e
 
 deployer = Deployer(
     pluginpath=args.plugin
@@ -276,6 +280,6 @@ deployer.run(
   args.deploydir,
   args.deploycachedir,
   args.revision,
-  args.revisionstokeep,
+  int(args.revisionstokeep),
   args.symlinks
   )
