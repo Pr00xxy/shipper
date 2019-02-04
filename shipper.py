@@ -55,6 +55,7 @@ class Deployer():
 
   deployPath = None
   revisionPath = None
+  pluginInstruction = None
 
   directories = {
     'revisions': 'revisions',
@@ -191,23 +192,25 @@ class Deployer():
         print('Could not create symlink ' + t + ' -> ' + l + ': ' + repr(e))
 
 
+  def getPluginInstruction(self):
+    if self.pluginInstruction is None:
+      try:
+        print('get plugin instruction')
+        with open(self.pluginPath, 'r') as pluginFile:
+          self.pluginInstruction = json.load(pluginFile)
+          return self.pluginInstruction
+      except (ValueError, json.JSONDecodeError) as e:
+        raise SystemExit(repr(e)) from e
+    else:
+      return self.pluginInstruction
+
   def dispatchEvent(self, eventName):
-    if self.pluginPath is None:
-      return
 
-    try:
-      with open(self.pluginPath, 'r') as ymlfile:
-        yml = yaml.load(ymlfile)
-        if yml is None:
-          return
-    except Exception as e:
-      raise SystemExit('Failed opening pugin file: ' + self.pluginPath + ' ' + repr(e)) from e
+    instruction = self.getPluginInstruction()
 
-    if not eventName in yml:
-      return
+    for execute in instruction['action'][eventName]['execute']:
 
-    for string in yml[eventName]['execute']:
-      moduleName = string.split('.')
+      moduleName = execute['name'].split('.')
 
       functionName = moduleName[-1]
       className = moduleName[-2]
@@ -220,8 +223,9 @@ class Deployer():
 
       try:
         classObject = getattr(moduleObject, className)(
-          self.deployPath,
-          self.revisionPath
+            self.deployPath,
+            self.revisionPath,
+            execute['variables']
           )
         functionObject = getattr(classObject, functionName)
       except AttributeError as e:
