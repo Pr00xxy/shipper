@@ -42,11 +42,16 @@ optional.add_argument('--symlinks',
                     action='store',
                     default='{}',
                     help='a JSON hash or filename of symbolic links to be created in the revision directory (default: {} )')
-optional.add_argument('--plugin',
+optional.add_argument('--plugin-file',
                     dest='plugin',
                     action='store',
                     default=None,
                     help='file path to the plugin file')
+optional.add_argument('--plugin-json',
+                    dest='pluginjson',
+                    action='store',
+                    default=None,
+                    help='json hash to be sent to the plugin')
 
 args = parser.parse_args()
 
@@ -63,8 +68,9 @@ class Deployer():
     'config': 'share/config',
   }
 
-  def __init__(self, pluginpath=None):
-    self.pluginPath = pluginpath
+  def __init__(self, plugin_path=None, plugin_json=None):
+    self.plugin_path = plugin_path
+    self.plugin_json = plugin_json
 
   def run(self, deployDir, deployCacheDir, revision, revisionsToKeep, symLinks):
     try:
@@ -196,7 +202,7 @@ class Deployer():
     if self.pluginInstruction is None:
       try:
         print('get plugin instruction')
-        with open(self.pluginPath, 'r') as pluginFile:
+        with open(self.plugin_path, 'r') as pluginFile:
           self.pluginInstruction = json.load(pluginFile)
           return self.pluginInstruction
       except (ValueError, json.JSONDecodeError) as e:
@@ -225,7 +231,8 @@ class Deployer():
         classObject = getattr(moduleObject, className)(
             self.deployPath,
             self.revisionPath,
-            execute['variables']
+            execute['variables'],
+            self.plugin_json
           )
         functionObject = getattr(classObject, functionName)
       except AttributeError as e:
@@ -279,7 +286,8 @@ class Deployer():
       raise SystemExit('Failed creating symlink to current ' + repr(e)) from e
 
 deployer = Deployer(
-    pluginpath=args.plugin
+    plugin_path=args.plugin,
+    plugin_json=args.pluginjson
 )
 
 deployer.run(
