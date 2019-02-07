@@ -22,14 +22,14 @@ required.add_argument('--revision',
                     default=None,
                     help='(required) accepts a string ID for this revision')
 required.add_argument('--deploy-dir',
-                    dest='deploydir',
+                    dest='deploy_dir',
                     action='store',
                     default=os.path.dirname(os.path.realpath(__file__)),
                     help='Base directory for deployment  (default: directory of shipper.py)')
 required.add_argument('--deploy-cache-dir',
                     dest='deploycachedir',
                     action='store',
-                    default=None,
+                    default="deploy_cache",
                     help='Directory in which the deployed files are initially deploy')
 optional.add_argument('--revisions-to-keep',
                     dest='revisionstokeep',
@@ -43,12 +43,12 @@ optional.add_argument('--symlinks',
                     default='{}',
                     help='a JSON hash or filename of symbolic links to be created in the revision directory (default: {} )')
 optional.add_argument('--plugin-file',
-                    dest='plugin',
+                    dest='plugin_file',
                     action='store',
                     default=None,
                     help='file path to the plugin file')
 optional.add_argument('--plugin-json',
-                    dest='pluginjson',
+                    dest='plugin_json',
                     action='store',
                     default=None,
                     help='json hash to be sent to the plugin')
@@ -58,9 +58,7 @@ args = parser.parse_args()
 
 class Deployer():
 
-  deployPath = None
-  revisionPath = None
-  pluginInstruction = None
+  plugin_instruction = None
 
   directories = {
     'revisions': 'revisions',
@@ -68,43 +66,57 @@ class Deployer():
     'config': 'share/config',
   }
 
-  def __init__(self, plugin_path=None, plugin_json=None):
+  def __init__(self,
+               plugin_path=None,
+               plugin_json=None,
+               deploy_dir=None,
+               deploy_cache_dir=None,
+               revision=None,
+               revisions_to_keep=None,
+               symlinks=None
+               ):
     self.plugin_path = plugin_path
     self.plugin_json = plugin_json
+    self.plugin_path = plugin_path
+    self.plugin_json = plugin_json
+    self.deploy_dir = deploy_dir
+    self.deploy_cache_dir = deploy_cache_dir
+    self.revision = revision
+    self.revisions_to_keep = revisions_to_keep
+    self.symlinks = symlinks
 
-  def run(self, deployDir, deployCacheDir, revision, revisionsToKeep, symLinks):
+  def run(self):
     try:
-
       # -------------------------------------------------------------
-      self.dispatchEvent('before:initDirectories')
+      self.dispatch_event('before:init_directories')
       print('Creating atomic deployment directories..')
-      self.initDirectories(deployDir)
-      self.dispatchEvent('after:initDirectories')
+      self.init_directories()
+      self.dispatch_event('after:init_directories')
       # -------------------------------------------------------------
-      self.dispatchEvent('before:createRevisionDir')
+      self.dispatch_event('before:create_revision_dir')
       print('Creating new revision directory..')
-      self.createRevisionDir(revision)
-      self.dispatchEvent('after:createRevisionDir')
+      self.create_revision_dir()
+      self.dispatch_event('after:create_revision_dir')
       # -------------------------------------------------------------
-      self.dispatchEvent('before:copyCacheToRevision')
-      self.copyCacheToRevision(deployCacheDir)
+      self.dispatch_event('before:copy_cache_to_revision')
+      self.copy_cache_to_revision()
       print('Copying deploy-cache to new revision directory..')
-      self.dispatchEvent('after:copyCacheToRevision')
+      self.dispatch_event('after:copy_cache_to_revision')
       # -------------------------------------------------------------
-      self.dispatchEvent('before:createSymlinks')
+      self.dispatch_event('before:create_symlinks')
       print('Creating symlinks within new revision directory..')
-      self.createSymlinks(symLinks)
-      self.dispatchEvent('after:createSymlinks')
+      self.create_symlinks()
+      self.dispatch_event('after:create_symlinks')
       # -------------------------------------------------------------
-      self.dispatchEvent('before:linkCurrentRevision')
+      self.dispatch_event('before:link_current_revision')
       print('Switching over to latest revision')
-      self.linkCurrentRevision()
-      self.dispatchEvent('after:linkCurrentRevision')
+      self.link_current_revision()
+      self.dispatch_event('after:link_current_revision')
       # -------------------------------------------------------------
-      self.dispatchEvent('before:pruneOldRevisions')
+      self.dispatch_event('before:purge_old_revisions')
       print('Purging old revisions')
-      self.purgeOldRevisions(revisionsToKeep)
-      self.dispatchEvent('after:pruneOldRevisions')
+      self.purge_old_revisions()
+      self.dispatch_event('after:purge_old_revisions')
       # -------------------------------------------------------------
 
       print('Done.')
@@ -115,15 +127,14 @@ class Deployer():
 
     return result
 
-
-  def initDirectories(self, deployDir):
-    if os.path.exists(deployDir) is True:
-      self.deployPath = deployDir.rstrip("/")
+  def init_directories(self):
+    if os.path.exists(self.deploy_dir) is True:
+      self.deploy_dir = self.deploy_dir.rstrip("/")
     else:
-      self.deployPath = ''
+      self.deploy_dir = ''
 
-    if not os.access(deployDir, os.W_OK) is True:
-      print('The deploy directory ' + deployDir + 'is not writable')
+    if not os.access(self.deploy_dir, os.W_OK) is True:
+      print('The deploy directory ' + self.deploy_dir + 'is not writable')
 
     if not os.path.isdir(self.directories['revisions']) is True:
       try:
@@ -143,105 +154,98 @@ class Deployer():
       except RuntimeError as e:
         raise SystemExit('Could not create revisions directory. ' + repr(e)) from e
 
+  def create_revision_dir(self):
+    self.revision_path = os.path.join(self.deploy_dir, self.directories['revisions'], self.revision)
+    self.revision_path = self.revision_path.rstrip("/")
 
-  def createRevisionDir(self, revision):
-    self.revisionPath = os.path.join(self.deployPath, self.directories['revisions'], revision)
-    self.revisionPath = self.revisionPath.rstrip("/")
+    if os.path.isdir(os.path.realpath(self.revision_path)) is True:
+      self.revision_path = self.revision_path + '-' + str(time.time())
 
-    if os.path.isdir(os.path.realpath(self.revisionPath)) is True:
-      self.revisionPath = self.revisionPath + '-' + str(time.time())
-
-    if not os.path.isdir(self.revisionPath) is True:
+    if not os.path.isdir(self.revision_path) is True:
       try:
-        os.mkdir(self.revisionPath)
+        os.mkdir(self.revision_path)
       except Exception as e:
-        raise SystemExit('Could not create revision directory; ' + self.revisionPath) from e
+        raise SystemExit('Could not create revision directory; ' + self.revision_path) from e
     else:
       print('Revision directory already exists. Aborting')
 
-    if not os.access(self.revisionPath, os.W_OK) is True:
-      sys.exit('The revision directory ' + self.revisionPath + 'is not writable')
+    if not os.access(self.revision_path, os.W_OK) is True:
+      sys.exit('The revision directory ' + self.revision_path + 'is not writable')
 
-
-  def copyCacheToRevision(self, deployCacheDir):
-    if os.path.isdir(deployCacheDir) is True:
+  def copy_cache_to_revision(self):
+    if os.path.isdir(self.deploy_cache_dir) is True:
       try:
         print('Copying deploy cache to revision directory')
-        copy_tree(deployCacheDir, self.revisionPath)
+        copy_tree(self.deploy_cache_dir, self.revision_path)
       except subprocess.CalledProcessError as e:
         raise SystemExit('Could not copy deploy cache to revision directory' + repr(e)) from e
 
+  def create_symlinks(self):
 
-  def createSymlinks(self, rawJsonString):
-
-    if os.path.isfile(rawJsonString) is True:
+    if os.path.isfile(self.symlinks) is True:
       try:
-        with open(rawJsonString, 'r') as fh:
-          symLinks = json.load(fh)
+        with open(self.symlinks, 'r') as fh:
+          symlink_data = json.load(fh)
       except Exception as e:
         print('Failed reading json data: ' + repr(e))
         return
     else:
       try:
-        symLinks = json.loads(rawJsonString)
+        symlink_data = json.loads(self.symlinks)
       except Exception as e:
         print('Failed reading json data: ' + repr(e))
         return
 
-    for (k, v) in symLinks.items():
-      t = self.deployPath + '/' + k
-      l = self.revisionPath + '/' + v
+    for (k, v) in symlink_data.items():
+      t = self.deploy_dir + '/' + k
+      l = self.revision_path + '/' + v
 
       try:
-        self.createSymlink(t, l)
+        self.create_symlink(t, l)
       except Exception as e:
         print('Could not create symlink ' + t + ' -> ' + l + ': ' + repr(e))
 
-
-  def getPluginInstruction(self):
-    if self.pluginInstruction is None:
+  def get_plugin_instruction(self):
+    if self.plugin_instruction is None:
       try:
         print('get plugin instruction')
-        with open(self.plugin_path, 'r') as pluginFile:
-          self.pluginInstruction = json.load(pluginFile)
-          return self.pluginInstruction
+        with open(self.plugin_path, 'r') as plugin_file:
+          self.plugin_instruction = json.load(plugin_file)
+          return self.plugin_instruction
       except (ValueError, json.JSONDecodeError) as e:
         raise SystemExit(repr(e)) from e
     else:
-      return self.pluginInstruction
+      return self.plugin_instruction
 
-  def dispatchEvent(self, eventName):
+  def dispatch_event(self, event_name):
 
-    instruction = self.getPluginInstruction()
+    instruction = self.get_plugin_instruction()
 
-    for execute in instruction['action'][eventName]['execute']:
+    if event_name in instruction['action']:
+      for execute in instruction['action'][event_name]['execute']:
 
-      moduleName = execute['name'].split('.')
+        module_name = execute['name'].split('.')
+        function_name = module_name[-1]
+        class_name = module_name[-2]
+        module_name = '.'.join(module_name[:-2])
+        try:
+          module_object = import_module(module_name)
+        except ModuleNotFoundError as e:
+          print('No such module was found: ' + module_name)
+          return False
 
-      functionName = moduleName[-1]
-      className = moduleName[-2]
-      moduleName = '.'.join(moduleName[:-2])
-      try:
-        moduleObject = import_module(moduleName)
-      except ModuleNotFoundError as e:
-        print('No such module was found: ' + moduleName)
-        return False
+        try:
+          class_object = getattr(module_object, class_name)(
+              self.deploy_dir,
+              self.revision_path
+            )
+          function_object = getattr(class_object, function_name)
+        except AttributeError as e:
+          raise SystemExit(repr(e))
 
-      try:
-        classObject = getattr(moduleObject, className)(
-            self.deployPath,
-            self.revisionPath,
-            execute['variables'],
-            self.plugin_json
-          )
-        functionObject = getattr(classObject, functionName)
-      except AttributeError as e:
-        raise SystemExit(repr(e))
+        function_object()
 
-      functionObject()
-
-
-  def createSymlink(self, target, link):
+  def create_symlink(self, target, link):
     if os.path.islink(link):
       os.unlink(link)
 
@@ -254,20 +258,19 @@ class Deployer():
     except Exception as e:
       print('Could not create symlink ' + target + ' -> ' + link)
 
+  def purge_old_revisions(self):
+    if self.revisions_to_keep > 0:
+      revisions_dir = self.deploy_dir + '/' + self.directories['revisions']
 
-  def purgeOldRevisions(self, revisionsToKeep):
-    if revisionsToKeep > 0:
-      revisionsDir = self.deployPath + '/' + self.directories['revisions']
-
-      name_list = os.listdir(revisionsDir)
-      full_list = [os.path.join(revisionsDir, i)
+      name_list = os.listdir(revisions_dir)
+      full_list = [os.path.join(revisions_dir, i)
                    for i in name_list]
       date_sorted = sorted(full_list, key=os.path.getmtime)
-      currentDirCount = len(date_sorted)
-      loopCount = currentDirCount - revisionsToKeep
+      curr_dir_count = len(date_sorted)
+      loop_count = curr_dir_count - self.revisions_to_keep
 
-      if currentDirCount > revisionsToKeep:
-        for v in date_sorted[:loopCount]:
+      if curr_dir_count > self.revisions_to_keep:
+        for v in date_sorted[:loop_count]:
           print('* ' + v)
           try:
             if os.path.isdir(v) is True:
@@ -277,23 +280,22 @@ class Deployer():
           except (NotADirectoryError, OSError) as e:
             print(repr(e))
 
-  def linkCurrentRevision(self):
-    revisionTarget = self.revisionPath
-    currentLink = self.deployPath + '/' + 'current'
+  def link_current_revision(self):
+    revision_target = self.revision_path
+    current_link = self.deploy_dir + '/' + 'current'
     try:
-      self.createSymlink(revisionTarget, currentLink)
+      self.create_symlink(revision_target, current_link)
     except FileNotFoundError as e:
       raise SystemExit('Failed creating symlink to current ' + repr(e)) from e
 
 deployer = Deployer(
-    plugin_path=args.plugin,
-    plugin_json=args.pluginjson
+    plugin_path=args.plugin_file,
+    plugin_json=args.plugin_json,
+    deploy_dir=args.deploy_dir,
+    deploy_cache_dir=args.deploycachedir,
+    revision=args.revision,
+    revisions_to_keep=int(args.revisionstokeep),
+    symlinks=args.symlinks
 )
 
-deployer.run(
-  args.deploydir,
-  args.deploycachedir,
-  args.revision,
-  int(args.revisionstokeep),
-  args.symlinks
-  )
+deployer.run()
