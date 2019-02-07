@@ -77,8 +77,6 @@ class Deployer():
                ):
     self.plugin_path = plugin_path
     self.plugin_json = plugin_json
-    self.plugin_path = plugin_path
-    self.plugin_json = plugin_json
     self.deploy_dir = deploy_dir
     self.deploy_cache_dir = deploy_cache_dir
     self.revision = revision
@@ -236,8 +234,13 @@ class Deployer():
 
         try:
           class_object = getattr(module_object, class_name)(
-              self.deploy_dir,
-              self.revision_path
+              plugin_data = execute['data'],
+              plugin_json = self.plugin_json,
+              deploy_dir = self.deploy_dir,
+              deploy_cache_dir = self.deploy_cache_dir,
+              revision = self.revision,
+              revisions_to_keep = self.revisions_to_keep,
+              symlinks = self.symlinks
             )
           function_object = getattr(class_object, function_name)
         except AttributeError as e:
