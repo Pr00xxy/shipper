@@ -25,7 +25,7 @@ required.add_argument('--deploy-dir',
                     dest='deploydir',
                     action='store',
                     default=os.path.dirname(os.path.realpath(__file__)),
-                    help='Base directory for deployment')
+                    help='Base directory for deployment  (default: directory of shipper.py)')
 required.add_argument('--deploy-cache-dir',
                     dest='deploycachedir',
                     action='store',
