@@ -126,31 +126,27 @@ class Deployer():
     return result
 
   def init_directories(self):
-    if os.path.exists(self.deploy_dir) is True:
-      self.deploy_dir = self.deploy_dir.rstrip("/")
-    else:
-      self.deploy_dir = ''
+
+    dirs_to_create = {
+        "revisions directory": self.directories['revisions'],
+        "share directory": self.directories['share'],
+        "config directory": self.directories['config']
+    }
+
+    if not os.path.exists(self.deploy_dir):
+      raise SystemExit('deployment directory does not exist.')
 
     if not os.access(self.deploy_dir, os.W_OK) is True:
-      print('The deploy directory ' + self.deploy_dir + 'is not writable')
+      raise SystemExit('The deploy directory ' + self.deploy_dir + ' is not writable')
 
-    if not os.path.isdir(self.directories['revisions']) is True:
-      try:
-        os.mkdir(self.directories['revisions'])
-      except RuntimeError as e:
-        raise SystemExit('Could not create revisions directory: ' + repr(e)) from e
-
-    if not os.path.isdir(self.directories['share']) is True:
-      try:
-        os.mkdir(self.directories['share'])
-      except RuntimeError as e:
-        raise SystemExit('Could not create share directory: ' + repr(e)) from e
-
-    if not os.path.isdir(self.directories['config']) is True:
-      try:
-        os.makedirs(self.directories['config'])
-      except RuntimeError as e:
-        raise SystemExit('Could not create revisions directory. ' + repr(e)) from e
+    for k, v in dirs_to_create:
+      if not os.path.isdir(v):
+        print(v + ' missing. Trying to create...')
+        try:
+          os.makedirs(v)
+          print('success')
+        except RuntimeError as e:
+          raise SystemExit('Could not create ' + k + ' ' + repr(e)) from e
 
   def create_revision_dir(self):
     self.revision_path = os.path.join(self.deploy_dir, self.directories['revisions'], self.revision)
@@ -165,10 +161,11 @@ class Deployer():
       except Exception as e:
         raise SystemExit('Could not create revision directory; ' + self.revision_path) from e
     else:
-      print('Revision directory already exists. Aborting')
+      print('Revision directory already exists.')
 
     if not os.access(self.revision_path, os.W_OK) is True:
-      sys.exit('The revision directory ' + self.revision_path + 'is not writable')
+      raise SystemExit('The revision directory ' + self.revision_path + 'is not writable')
+
 
   def copy_cache_to_revision(self):
     if os.path.isdir(self.deploy_cache_dir) is True:
@@ -178,42 +175,44 @@ class Deployer():
       except subprocess.CalledProcessError as e:
         raise SystemExit('Could not copy deploy cache to revision directory' + repr(e)) from e
 
-  def create_symlinks(self):
 
+  def create_symlinks(self):
     if os.path.isfile(self.symlinks) is True:
       try:
         with open(self.symlinks, 'r') as fh:
           symlink_data = json.load(fh)
       except Exception as e:
         print('Failed reading json data: ' + repr(e))
-        return
-    else:
+    else: # Try loading the json as is if given data is not a file
       try:
         symlink_data = json.loads(self.symlinks)
       except Exception as e:
         print('Failed reading json data: ' + repr(e))
-        return
+
+    if symlink_data is None:
+      return
 
     for (k, v) in symlink_data.items():
-      t = self.deploy_dir + '/' + k
-      l = self.revision_path + '/' + v
+      t = os.path.join(self.deploy_dir, k)
+      l = os.path.join(self.revision_path, v)
 
       try:
         self.create_symlink(t, l)
       except Exception as e:
-        print('Could not create symlink ' + t + ' -> ' + l + ': ' + repr(e))
+        print('Could not create symlink ' + t + ' -> ' + l)
+
 
   def get_plugin_instruction(self):
     if self.plugin_instruction is None:
       try:
-        print('get plugin instruction')
         with open(self.plugin_path, 'r') as plugin_file:
           self.plugin_instruction = json.load(plugin_file)
           return self.plugin_instruction
       except (ValueError, json.JSONDecodeError) as e:
         raise SystemExit(repr(e)) from e
-    else:
-      return self.plugin_instruction
+
+    return self.plugin_instruction
+
 
   def dispatch_event(self, event_name):
 
@@ -248,6 +247,7 @@ class Deployer():
 
         function_object()
 
+
   def create_symlink(self, target, link):
     if os.path.islink(link):
       os.unlink(link)
@@ -261,14 +261,15 @@ class Deployer():
     except Exception as e:
       print('Could not create symlink ' + target + ' -> ' + link)
 
+
   def purge_old_revisions(self):
     if self.revisions_to_keep > 0:
-      revisions_dir = self.deploy_dir + '/' + self.directories['revisions']
+      revisions_dir = os.path.join(self.deploy_dir, self.directories['revisions'])
 
-      name_list = os.listdir(revisions_dir)
-      full_list = [os.path.join(revisions_dir, i)
-                   for i in name_list]
-      date_sorted = sorted(full_list, key=os.path.getmtime)
+      date_sorted = sorted([os.path.join(revisions_dir, i)
+                            for i in os.listdir(revisions_dir)],
+                            key=os.path.getmtime
+                          )
       curr_dir_count = len(date_sorted)
       loop_count = curr_dir_count - self.revisions_to_keep
 
@@ -283,18 +284,19 @@ class Deployer():
           except (NotADirectoryError, OSError) as e:
             print(repr(e))
 
+
   def link_current_revision(self):
-    revision_target = self.revision_path
-    current_link = self.deploy_dir + '/' + 'current'
     try:
-      self.create_symlink(revision_target, current_link)
+      self.create_symlink(self.revision_path,
+                          os.path.join(self.deploy_dir, 'current'))
     except FileNotFoundError as e:
       raise SystemExit('Failed creating symlink to current ' + repr(e)) from e
+
 
 deployer = Deployer(
     plugin_path=args.plugin_file,
     plugin_json=args.plugin_json,
-    deploy_dir=args.deploy_dir,
+    deploy_dir=args.deploy_dir.rstrip("/"),
     deploy_cache_dir=args.deploycachedir,
     revision=args.revision,
     revisions_to_keep=int(args.revisionstokeep),
