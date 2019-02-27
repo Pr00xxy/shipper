@@ -56,7 +56,15 @@ optional.add_argument('--plugin-json',
 args = parser.parse_args()
 
 
-class Deployer():
+class Colors(object):
+    BLUE = '\x1b[0;34m'
+    GREEN = '\x1b[0;32m'
+    RED = '\x1b[0;31m'
+    ORANGE = '\x1b[0;33m'
+    WHITE = '\x1b[0;97m'
+    END = '\033[0;0m'
+
+class Deployer(object):
     plugin_instruction = None
 
     directories = {
@@ -86,37 +94,37 @@ class Deployer():
         try:
             # -------------------------------------------------------------
             self.dispatch_event('before:init_directories')
-            print('Creating atomic deployment directories..')
+            print(Colors.BLUE + 'Creating atomic deployment directories..' + Colors.END)
             self.init_directories()
             self.dispatch_event('after:init_directories')
             # -------------------------------------------------------------
             self.dispatch_event('before:create_revision_dir')
-            print('Creating new revision directory..')
+            print(Colors.BLUE + 'Creating new revision directory..' + Colors.END)
             self.create_revision_dir()
             self.dispatch_event('after:create_revision_dir')
             # -------------------------------------------------------------
             self.dispatch_event('before:copy_cache_to_revision')
+            print(Colors.BLUE + 'Copying deploy-cache to new revision directory..' + Colors.END)
             self.copy_cache_to_revision()
-            print('Copying deploy-cache to new revision directory..')
             self.dispatch_event('after:copy_cache_to_revision')
             # -------------------------------------------------------------
             self.dispatch_event('before:create_symlinks')
-            print('Creating symlinks within new revision directory..')
+            print(Colors.BLUE + 'Creating symlinks within new revision directory..' + Colors.END)
             self.create_symlinks()
             self.dispatch_event('after:create_symlinks')
             # -------------------------------------------------------------
             self.dispatch_event('before:link_current_revision')
-            print('Switching over to latest revision')
+            print(Colors.BLUE + 'Switching over to latest revision' + Colors.END)
             self.link_current_revision()
             self.dispatch_event('after:link_current_revision')
             # -------------------------------------------------------------
             self.dispatch_event('before:purge_old_revisions')
-            print('Purging old revisions')
+            print(Colors.BLUE + 'Purging old revisions' + Colors.END)
             self.purge_old_revisions()
             self.dispatch_event('after:purge_old_revisions')
             # -------------------------------------------------------------
 
-            print('Done.')
+            print(Colors.GREEN + 'Done.' + Colors.END)
 
             result = True
         except Exception:
@@ -133,70 +141,78 @@ class Deployer():
         }
 
         if not os.path.exists(self.deploy_dir):
-            raise SystemExit('[!] Deployment directory does not exist.')
+            raise SystemExit(Colors.ORANGE + '[!] Deployment directory does not exist.' + Colors.END)
 
         if not os.access(self.deploy_dir, os.W_OK) is True:
-            raise SystemExit('[!] The deploy directory {0} is not writable'.format(self.deploy_dir))
+            raise SystemExit(
+                Colors.RED + '[!] The deploy directory {0} is not writable'.format(self.deploy_dir) + Colors.END)
 
-        for k, v in dirs_to_create:
+        for k, v in dirs_to_create.items():
             if not os.path.isdir(v):
-                print('[!] {0} missing. Trying to create...'.format(v))
+                print(Colors.ORANGE + '[!] {0} missing. Trying to create... '.format(v) + Colors.END, end='')
                 try:
                     os.makedirs(v)
-                    print('success')
+                    print(Colors.GREEN + 'success' + Colors.END)
                 except RuntimeError as e:
-                    raise SystemExit('[!] Could not create {0} {1}'.format(k, repr(e))) from e
+                    print(Colors.RED + 'failed' + Colors.END)
+                    raise SystemExit(Colors.RED + 'failed creating {0} {1}'.format(k, repr(e)) + Colors.END) from e
 
     def create_revision_dir(self):
         self.revision_path = os.path.join(self.deploy_dir, self.directories['revisions'], self.revision)
         self.revision_path = self.revision_path.rstrip("/")
 
         if os.path.isdir(os.path.realpath(self.revision_path)) is True:
-            self.revision_path = self.revision_path + '-' + str(time.time())
+            self.revision_path = self.revision_path + '-' + str(round(time.time()))
 
         if not os.path.isdir(self.revision_path) is True:
             try:
                 os.mkdir(self.revision_path)
             except Exception as e:
-                raise SystemExit('[!] Could not create revision directory: {0}'.format(self.revision_path)) from e
+                raise SystemExit(Colors.RED + '[!] Could not create revision directory: {0}'.format(
+                    self.revision_path) + Colors.END) from e
         else:
-            print('Revision directory already exists.')
+            print(Colors.BLUE + 'Revision directory already exists.' + Colors.END)
 
         if not os.access(self.revision_path, os.W_OK) is True:
-            raise SystemExit('[!] The revision directory {0} is not writable'.format(self.revision_path))
+            raise SystemExit(
+                Colors.RED + '[!] The revision directory {0} is not writable'.format(self.revision_path) + Colors.END)
 
     def copy_cache_to_revision(self):
         if os.path.isdir(self.deploy_cache_dir) is True:
             try:
-                print('Copying deploy cache to revision directory')
+                print(Colors.BLUE + 'Copying deploy cache to revision directory' + Colors.END)
                 copy_tree(self.deploy_cache_dir, self.revision_path)
             except subprocess.CalledProcessError as e:
-                raise SystemExit('[!] Could not copy deploy cache to revision directory') from e
+                raise SystemExit(
+                    Colors.RED + '[!] Could not copy deploy cache to revision directory' + Colors.END) from e
 
     def create_symlinks(self):
+
+        symlink_data = None
+
         if os.path.isfile(self.symlinks) is True:
             try:
                 with open(self.symlinks, 'r') as fh:
                     symlink_data = json.load(fh)
             except Exception as e:
-                print('[!] Failed reading json data: {0}'.format(repr(e)))
+                print(Colors.RED + '[!] Failed reading json data: {0}'.format(repr(e)) + Colors.END)
         else:  # Try loading the json as is if given data is not a file
             try:
                 symlink_data = json.loads(self.symlinks)
             except Exception as e:
-                print('[!] Failed reading json data: {0}'.format(repr(e)))
+                print(Colors.RED + '[!] Failed reading json data: {0}'.format(repr(e)) + Colors.END)
 
         if symlink_data is None:
             return
 
         for (k, v) in symlink_data.items():
-            t = os.path.join(self.deploy_dir, k)
-            l = os.path.join(self.revision_path, v)
+            target = os.path.join(self.deploy_dir, k)
+            link = os.path.join(self.revision_path, v)
 
             try:
-                self.create_symlink(t, l)
+                self.create_symlink(target, link)
             except Exception:
-                print('[!] Could not create symlink {0} -> {1}'.format(t, l))
+                print(Colors.RED + '[!] Could not create symlink {0} -> {1}'.format(target, link) + Colors.END)
 
     def get_plugin_instruction(self):
         if self.plugin_instruction is None:
@@ -223,7 +239,7 @@ class Deployer():
                 try:
                     module_object = import_module(module_name)
                 except ModuleNotFoundError as e:
-                    print('[!] No such module was found: {0}'.format(module_name))
+                    print(Colors.RED + '[!] No such module was found: {0}'.format(module_name) + Colors.END)
                     return False
 
                 try:
@@ -235,22 +251,26 @@ class Deployer():
                 function_object()
 
     def create_symlink(self, target, link):
-        print('Creating symlink for {0} -> {1}'.format(link, target))
+
+        print(Colors.WHITE + 'Creating symlink for {0} -> {1}'.format(link, target) + Colors.END)
         if os.path.islink(link):
-            print('[!] Target {0} is symlink already. deleting..'.format(link))
+            print(Colors.ORANGE + '[!] Target {0} is symlink already. deleting.. '.format(link) + Colors.END, end='')
             os.unlink(link)
-            print('done')
+            print(Colors.GREEN + 'done' + Colors.END)
 
         try:
             if os.path.isfile(link) is True:
-                print('[!] Target {0} is file already. deleting..'.format(link))
+                print(Colors.ORANGE + '[!] Target {0} is file already. deleting.. '.format(link) + Colors.END, end='')
                 os.remove(link)
+                print(Colors.GREEN + 'done' + Colors.END)
             if os.path.isdir(link) is True:
-                print('[!] Target {0} is directory already. deleting..'.format(link))
+                print(Colors.ORANGE + '[!] Target {0} is directory already. deleting..'.format(link) + Colors.END, end='')
                 shutil.rmtree(link)
+                print(Colors.GREEN + 'done' + Colors.END)
             os.symlink(target, link)
         except (Exception, FileNotFoundError):
-            print('[!] Could not create symlink {0} -> {1}'.format(target, link))
+            print(Colors.RED + 'failed' + Colors.END)
+            print(Colors.RED + '[!] Could not create symlink {0} -> {1}'.format(target, link) + Colors.END)
 
     def purge_old_revisions(self):
         if self.revisions_to_keep > 0:
@@ -265,17 +285,19 @@ class Deployer():
 
             if curr_dir_count > self.revisions_to_keep:
                 for v in date_sorted[:loop_count]:
-                    print('* ' + v)
                     try:
+                        print(Colors.WHITE + '└ Deleting {0} '.format(v) + Colors.END, end='')
                         if os.path.isdir(v) is True:
                             shutil.rmtree(v)
+                            print(Colors.GREEN + 'done' + Colors.END)
                         else:
-                            print('[!] Failed deleting {0}. not a directory'.format(v))
+                            print(Colors.RED + 'failed' + Colors.END)
+                            print(Colors.ORANGE + '[!] Failed deleting {0}. not a directory'.format(v) + Colors.END)
                     except (NotADirectoryError, OSError) as e:
-                        print(repr(e))
+                        print( Colors.ORANGE + repr(e) + Colors.END)  # TODO: improve this
 
     def link_current_revision(self):
-        self.create_symlink(self.revision_path,os.path.join(self.deploy_dir, 'current'))
+        self.create_symlink(self.revision_path, os.path.join(self.deploy_dir, 'current'))
 
 
 deployer = Deployer(
