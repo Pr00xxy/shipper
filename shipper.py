@@ -133,19 +133,19 @@ class Deployer():
         }
 
         if not os.path.exists(self.deploy_dir):
-            raise SystemExit('deployment directory does not exist.')
+            raise SystemExit('[!] Deployment directory does not exist.')
 
         if not os.access(self.deploy_dir, os.W_OK) is True:
-            raise SystemExit('The deploy directory ' + self.deploy_dir + ' is not writable')
+            raise SystemExit('[!] The deploy directory {0} is not writable'.format(self.deploy_dir))
 
         for k, v in dirs_to_create:
             if not os.path.isdir(v):
-                print(v + ' missing. Trying to create...')
+                print('[!] {0} missing. Trying to create...'.format(v))
                 try:
                     os.makedirs(v)
                     print('success')
                 except RuntimeError as e:
-                    raise SystemExit('Could not create ' + k + ' ' + repr(e)) from e
+                    raise SystemExit('[!] Could not create {0} {1}'.format(k, repr(e))) from e
 
     def create_revision_dir(self):
         self.revision_path = os.path.join(self.deploy_dir, self.directories['revisions'], self.revision)
@@ -158,12 +158,12 @@ class Deployer():
             try:
                 os.mkdir(self.revision_path)
             except Exception as e:
-                raise SystemExit('Could not create revision directory; ' + self.revision_path) from e
+                raise SystemExit('[!] Could not create revision directory: {0}'.format(self.revision_path)) from e
         else:
             print('Revision directory already exists.')
 
         if not os.access(self.revision_path, os.W_OK) is True:
-            raise SystemExit('The revision directory ' + self.revision_path + 'is not writable')
+            raise SystemExit('[!] The revision directory {0} is not writable'.format(self.revision_path))
 
     def copy_cache_to_revision(self):
         if os.path.isdir(self.deploy_cache_dir) is True:
@@ -171,7 +171,7 @@ class Deployer():
                 print('Copying deploy cache to revision directory')
                 copy_tree(self.deploy_cache_dir, self.revision_path)
             except subprocess.CalledProcessError as e:
-                raise SystemExit('Could not copy deploy cache to revision directory' + repr(e)) from e
+                raise SystemExit('[!] Could not copy deploy cache to revision directory') from e
 
     def create_symlinks(self):
         if os.path.isfile(self.symlinks) is True:
@@ -179,12 +179,12 @@ class Deployer():
                 with open(self.symlinks, 'r') as fh:
                     symlink_data = json.load(fh)
             except Exception as e:
-                print('Failed reading json data: ' + repr(e))
+                print('[!] Failed reading json data: {0}'.format(repr(e)))
         else:  # Try loading the json as is if given data is not a file
             try:
                 symlink_data = json.loads(self.symlinks)
             except Exception as e:
-                print('Failed reading json data: ' + repr(e))
+                print('[!] Failed reading json data: {0}'.format(repr(e)))
 
         if symlink_data is None:
             return
@@ -196,7 +196,7 @@ class Deployer():
             try:
                 self.create_symlink(t, l)
             except Exception:
-                print('Could not create symlink ' + t + ' -> ' + l)
+                print('[!] Could not create symlink {0} -> {1}'.format(t, l))
 
     def get_plugin_instruction(self):
         if self.plugin_instruction is None:
@@ -223,7 +223,7 @@ class Deployer():
                 try:
                     module_object = import_module(module_name)
                 except ModuleNotFoundError as e:
-                    print('No such module was found: ' + module_name)
+                    print('[!] No such module was found: {0}'.format(module_name))
                     return False
 
                 try:
@@ -250,7 +250,7 @@ class Deployer():
                 shutil.rmtree(link)
             os.symlink(target, link)
         except (Exception, FileNotFoundError):
-            print('Could not create symlink {0} -> {1}'.format(target, link))
+            print('[!] Could not create symlink {0} -> {1}'.format(target, link))
 
     def purge_old_revisions(self):
         if self.revisions_to_keep > 0:
@@ -270,7 +270,7 @@ class Deployer():
                         if os.path.isdir(v) is True:
                             shutil.rmtree(v)
                         else:
-                            print('[!] Failed deleting %s. not a directory' % v)
+                            print('[!] Failed deleting {0}. not a directory'.format(v))
                     except (NotADirectoryError, OSError) as e:
                         print(repr(e))
 
