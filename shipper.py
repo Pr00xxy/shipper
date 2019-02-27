@@ -6,8 +6,6 @@ import subprocess
 import json
 import argparse
 import shutil
-import yaml
-import sys
 from distutils.dir_util import copy_tree
 from importlib import import_module
 
