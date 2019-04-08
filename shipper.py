@@ -39,7 +39,7 @@ optional.add_argument('--symlinks',
                       dest='symlinks',
                       action='store',
                       default='{}',
-                      help='a JSON hash or filename of symbolic links to be created in the revision directory (default: {} )')
+                      help='A JSON hash or filename of symbolic links to be created in the revision directory (default: {} )')
 optional.add_argument('--plugin-file',
                       dest='plugin_file',
                       action='store',
@@ -55,12 +55,13 @@ args = parser.parse_args()
 
 
 class Colors(object):
-    BLUE = '\x1b[0;34m'
-    GREEN = '\x1b[0;32m'
-    RED = '\x1b[0;31m'
-    ORANGE = '\x1b[0;33m'
+    BLUE: str = '\x1b[0;34m'
+    GREEN: str = '\x1b[0;32m'
+    RED: str = '\x1b[0;31m'
+    ORANGE: str = '\x1b[0;33m'
     WHITE = '\x1b[0;97m'
-    END = '\033[0;0m'
+    END: str = '\033[0;0m'
+
 
 class Deployer(object):
     plugin_instruction = None
@@ -236,7 +237,7 @@ class Deployer(object):
                 module_name = '.'.join(module_name[:-2])
                 try:
                     module_object = import_module(module_name)
-                except ModuleNotFoundError as e:
+                except ModuleNotFoundError:
                     print(Colors.RED + '[!] No such module was found: {0}'.format(module_name) + Colors.END)
                     return False
 
@@ -269,6 +270,9 @@ class Deployer(object):
         except (Exception, FileNotFoundError):
             print(Colors.RED + 'failed' + Colors.END)
             print(Colors.RED + '[!] Could not create symlink {0} -> {1}'.format(target, link) + Colors.END)
+            return False
+
+        return True
 
     def purge_old_revisions(self):
         if self.revisions_to_keep > 0:
@@ -292,7 +296,7 @@ class Deployer(object):
                             print(Colors.RED + 'failed' + Colors.END)
                             print(Colors.ORANGE + '[!] Failed deleting {0}. not a directory'.format(v) + Colors.END)
                     except (NotADirectoryError, OSError) as e:
-                        print( Colors.ORANGE + repr(e) + Colors.END)  # TODO: improve this
+                        print(Colors.ORANGE + repr(e) + Colors.END)  # TODO: improve this
 
     def link_current_revision(self):
         self.create_symlink(self.revision_path, os.path.join(self.deploy_dir, 'current'))
