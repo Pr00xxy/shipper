@@ -1,7 +1,8 @@
-# Shipper
+# Shipper 2.0
 
-This project is based on the concept of sharing resources across deployments in combination with the need of modularity and scaleability.
-Shipper was built to be run on Linux
+This project is grounded in the concept of atomic deployments with emphasising scalability and modularity
+ 
+Shipper was built to be run on Linux.
 
 ## Requirements
 
@@ -29,10 +30,11 @@ python3 <(curl -sS https://raw.githubusercontent.com/Pr00xxy/shipper/master/ship
 
 #### Plugins
 
-Plugins are user made modules that can injected in the code at will.
+Plugins are user made modules that can be hooked into the code at will.
 
 To define a new plugin one must create a json file and pass it to shipper with
 --plugin
+Plugins are executed by dispatching events in the shipper code.  
 Looking inside the `Deployer.run()` we can find plugin dispatchers such as:
 
     self.dispatchEvent('before:initDirectories', pluginPath)
@@ -44,12 +46,7 @@ To add plugin to this event one must add the following structure to `plugin.json
             "before:initDirectories": {
                 "execute": [
                     {
-                        "name": "plugin.module_name.class_name.function_name",
-                        "data": [
-                            { "foo": "bar" },
-                            { "biz": "baz" },
-                            { "int": 1 }
-                        ]
+                        "name": "plugin.module_name.class_name.function_name"
                     }
                 ]
             }
@@ -58,7 +55,6 @@ To add plugin to this event one must add the following structure to `plugin.json
 
 the `execute` directive tells Shipper what to execute and in what order.
 In the example above Shipper will try to include `module_name` in the folder `plugin/` and from that import `class_name` and then execute `function_name`
-The `data` array will pass the content the array as is to the function being called. All flag values are also passed into the plugin
 
 above can be translated to
 
@@ -67,14 +63,15 @@ above can be translated to
     function_name()
 
 Multiple instructions can be added to the `execute` array
+Functions are executed as if they were a part of the `Deployer` class
 
 #### Symlinks
 
-Symlinks are specified as `{"target":"linkname"}`
+Symlinks are specified as `{"target":"linkname"}` and passed to the shipper script using the `--symlinks` parametert
 
 - `target` is relative to the `--deploy-dir` path
 - `linkname` is relative to the revision path
 
-symlinks can be specified as strings or as filepaths.
+Symlinks can be specified as strings or as the path to json file containing the json array.
 
 **NOTE!** Files and directories that exist at the link location will be removed without notice.
