@@ -1,3 +1,16 @@
+## [2.0.0] 2019-04-08
+
+### Changed
+- Plugin instructions are now json instead of yaml
+- Improved option documentation
+- Improved logging output
+- Refractored all variables and functions according to PEP8
+- Fixed indentation formatting
+
+### Added
+- New option --plugin-json
+- Color output
+
 ## [1.2.0] 2019-01-21
 
 ### Changed

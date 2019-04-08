@@ -62,6 +62,7 @@ class Colors(object):
     WHITE = '\x1b[0;97m'
     END = '\033[0;0m'
 
+
 class Deployer(object):
     plugin_instruction = None
 
