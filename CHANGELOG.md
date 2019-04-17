@@ -1,3 +1,8 @@
+## [2.0.1] 2019-04-17
+
+### Changed
+- Changed plugin configuration behavior due to bad implementation 
+
 ## [2.0.0] 2019-04-08
 
 ### Changed

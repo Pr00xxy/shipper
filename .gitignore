@@ -1,5 +1,5 @@
 **/.vscode
-**/plugin.yml
+**/plugin.json
 **/__pycache__
 **/revisions/
 **/cache/

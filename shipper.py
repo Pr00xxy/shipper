@@ -226,12 +226,15 @@ class Deployer(object):
 
     def dispatch_event(self, event_name):
 
+        if self.plugin_path is None:
+            return
+
         instruction = self.get_plugin_instruction()
 
         if event_name in instruction['action']:
             for execute in instruction['action'][event_name]['execute']:
 
-                module_name = execute['name'].split('.')
+                module_name = execute.split('.')
                 function_name = module_name[-1]
                 class_name = module_name[-2]
                 module_name = '.'.join(module_name[:-2])

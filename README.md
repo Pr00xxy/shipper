@@ -45,9 +45,7 @@ To add plugin to this event one must add the following structure to `plugin.json
         "action": {
             "before:initDirectories": {
                 "execute": [
-                    {
-                        "name": "plugin.module_name.class_name.function_name"
-                    }
+                    "plugin.module_name.class_name.function_name"
                 ]
             }
         }
@@ -63,7 +61,6 @@ above can be translated to
     function_name()
 
 Multiple instructions can be added to the `execute` array
-Functions are executed as if they were a part of the `Deployer` class
 
 #### Symlinks
 
