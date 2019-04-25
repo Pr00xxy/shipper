@@ -1,7 +1,15 @@
+## [2.1.0] 2019-04-25
+
+### Changed
+- Updated README.md
+
+### Added
+- Added GPLv3 licence
+
 ## [2.0.1] 2019-04-17
 
 ### Changed
-- Changed plugin configuration behavior due to bad implementation 
+- Changed plugin configuration behavior due to bad implementation
 
 ## [2.0.0] 2019-04-08
 
