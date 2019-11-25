@@ -267,6 +267,7 @@ class Deployer(object):
                 except AttributeError as e:
                     raise SystemExit(repr(e))
 
+                print(Color.ORANGE + 'Executing plugin: {0}'.format(function_name) + Colors.END)
                 function_object()
 
     def create_symlink(self, target, link):
