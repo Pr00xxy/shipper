@@ -1,21 +1,6 @@
 #!/usr/bin/env python3
 
-# PFPCW
-# Copyright(C) 2019 Hampus Westman
-
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY
-# without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see https://www.gnu.org/licenses.
+# Shipper
 
 import os
 import time
@@ -272,21 +257,24 @@ class Deployer(object):
     def create_symlink(self, target, link):
 
         print(Colors.WHITE + 'Creating symlink for {0} -> {1}'.format(link, target) + Colors.END)
+
         if os.path.islink(link):
             print(Colors.ORANGE + '[!] Target {0} is symlink already. deleting.. '.format(link) + Colors.END, end='')
             os.unlink(link)
             print(Colors.GREEN + 'done' + Colors.END)
 
         try:
-            if os.path.isfile(link) is True:
+            if os.path.isfile(link):
                 print(Colors.ORANGE + '[!] Target {0} is file already. deleting.. '.format(link) + Colors.END, end='')
                 os.remove(link)
                 print(Colors.GREEN + 'done' + Colors.END)
-            if os.path.isdir(link) is True:
+            if os.path.isdir(link):
                 print(Colors.ORANGE + '[!] Target {0} is directory already. deleting..'.format(link) + Colors.END, end='')
                 shutil.rmtree(link)
                 print(Colors.GREEN + 'done' + Colors.END)
+
             os.symlink(target, link)
+
         except (Exception, FileNotFoundError):
             print(Colors.RED + 'failed' + Colors.END)
             print(Colors.RED + '[!] Could not create symlink {0} -> {1}'.format(target, link) + Colors.END)
@@ -294,15 +282,16 @@ class Deployer(object):
     def purge_old_revisions(self):
         if self.revisions_to_keep > 0:
             revisions_dir = os.path.join(self.deploy_dir, self.directories['revisions'])
+            no_of_revisions = len(revisions_dir)
 
             date_sorted = sorted([os.path.join(revisions_dir, i)
-                                  for i in os.listdir(revisions_dir)],
+                                 for i in os.listdir(revisions_dir)],
                                  key=os.path.getmtime
                                  )
-            curr_dir_count = len(date_sorted)
-            loop_count = curr_dir_count - self.revisions_to_keep
 
-            if curr_dir_count > self.revisions_to_keep:
+            loop_count = no_of_revisions - self.revisions_to_keep
+
+            if no_of_revisions > self.revisions_to_keep:
                 for v in date_sorted[:loop_count]:
                     try:
                         print(Colors.WHITE + '└ Deleting {0} '.format(v) + Colors.END, end='')
@@ -313,7 +302,7 @@ class Deployer(object):
                             print(Colors.RED + 'failed' + Colors.END)
                             print(Colors.ORANGE + '[!] Failed deleting {0}. not a directory'.format(v) + Colors.END)
                     except (NotADirectoryError, OSError) as e:
-                        print( Colors.ORANGE + repr(e) + Colors.END)  # TODO: improve this
+                        print( Colors.ORANGE + repr(e) + Colors.END)
 
     def link_current_revision(self):
         self.create_symlink(self.revision_path, os.path.join(self.deploy_dir, 'current'))
