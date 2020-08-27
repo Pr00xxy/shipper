@@ -1,0 +1,2 @@
+fabric==2.5
+patchwork==1.0
