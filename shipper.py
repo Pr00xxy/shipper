@@ -9,6 +9,7 @@ import shutil
 import time
 from importlib import import_module
 import pkg_resources
+import sys
 
 pkg_resources.require('fabric==2.5')
 import fabric
@@ -20,6 +21,16 @@ parser._action_groups.pop()
 required = parser.add_argument_group('required arguments')
 optional = parser.add_argument_group('optional arguments')
 
+required.add_argument('--host',
+                      dest='host',
+                      action='store',
+                      default=None,
+                      help='')
+required.add_argument('--user',
+                      dest='user',
+                      action='store',
+                      default=None,
+                      help='')
 required.add_argument('--revision',
                       dest='revision',
                       action='store',
@@ -51,11 +62,6 @@ optional.add_argument('--plugin-file',
                       action='store',
                       default=None,
                       help='file path to the plugin file')
-optional.add_argument('--plugin-json',
-                      dest='plugin_json',
-                      action='store',
-                      default=None,
-                      help='json hash to be sent to the plugin')
 
 args = parser.parse_args()
 
@@ -95,9 +101,12 @@ class Log(object):
     def notice(text: str):
         print(Colors.BLUE + text + Colors.END)
 
+
 class Shipper(object):
     plugin_instruction = None
     connection = None
+    dispatched_events: slice = []
+    last_event_dispatched: str = None
 
     directories = {
         'revisions': 'revisions',
@@ -105,16 +114,18 @@ class Shipper(object):
     }
 
     def __init__(self,
+                 host=None,
+                 user=None,
                  plugin_path=None,
-                 plugin_json=None,
                  deploy_dir=None,
                  source_dir=None,
                  revision=None,
                  revisions_to_keep=None,
                  symlinks=None
                  ):
+        self.host = host
+        self.user = user,
         self.plugin_path = plugin_path
-        self.plugin_json = plugin_json
         self.deploy_dir = deploy_dir
         self.source_dir = source_dir
         self.revision = revision
@@ -122,51 +133,53 @@ class Shipper(object):
         self.symlinks = symlinks
 
     def _get_connection(self):
+
         if self.connection is None:
-            self.connection = fabric.Connection()
+            self.connection = fabric.Connection(
+
+            )
 
         return self.connection
 
     def run(self):
+
+        event = Event(
+            plugin_path=self.plugin_path,
+            shipper=self
+        )
+
         try:
 
-            self.dispatch_event('before:init_directories')
             Log.notice('Creating atomic deployment directories..')
+            event.dispatch('before:init_directories')
             self.init_directories()
-            self.dispatch_event('after:init_directories')
 
-            self.dispatch_event('before:create_revision_dir')
             Log.notice('Creating new revision directory..')
+            event.dispatch('before:create_revision_dir')
             self.create_revision_dir()
-            self.dispatch_event('after:create_revision_dir')
 
-            self.dispatch_event('before:copy_cache_to_revision')
             Log.notice('Copying source-dir to new revision directory..')
+            event.dispatch('before:copy_cache_to_revision')
             self.copy_cache_to_revision()
-            self.dispatch_event('after:copy_cache_to_revision')
 
-            self.dispatch_event('before:create_symlinks')
             Log.notice('Creating symlinks within new revision directory..')
+            event.dispatch('before:create_symlinks')
             self.create_symlinks()
-            self.dispatch_event('after:create_symlinks')
 
-            self.dispatch_event('before:link_current_revision')
             Log.notice('Switching over to latest revision')
+            event.dispatch('before:link_current_revision')
             self.link_current_revision()
-            self.dispatch_event('after:link_current_revision')
 
-            self.dispatch_event('before:purge_old_revisions')
             Log.notice('Purging old revisions')
+            event.dispatch('before:purge_old_revisions')
             self.purge_old_revisions()
-            self.dispatch_event('after:purge_old_revisions')
-
             Log.success('Done.')
 
-            result = True
         except ShipperError:
-            result = False
+            event.dispatch('after:shipper_error')
+            sys.exit(1)
 
-        return result
+        sys.exit(0)
 
     def _create_directory(self, directory: str):
         with self._get_connection() as c:
@@ -174,7 +187,7 @@ class Shipper(object):
                 c.run('mkdir {}'.format(directory))
                 Log.success('success')
             except UnexpectedExit as e:
-                print(Colors.RED + 'failed' + Colors.END)
+                Log.error('failed')
                 raise ShipperError(
                     Colors.RED + 'failed creating {0} {1}'.format(directory, repr(e)) + Colors.END) from e
 
@@ -202,7 +215,7 @@ class Shipper(object):
             "share directory": self.directories['share'],
         }
 
-        if not files.exists(self.deploy_dir):
+        if self._dir_exists(self.deploy_dir):
             raise ShipperError(Colors.ORANGE + '[!] Deployment directory does not exist.' + Colors.END)
 
         self._test_write_to_dir(self.deploy_dir)
@@ -241,7 +254,7 @@ class Shipper(object):
                     c.run('cp -r {0}/. {1}/'.format(cache_dir, self.revision_path))
             except UnexpectedExit as e:
                 raise ShipperError(
-                    Colors.RED + '[!] Could not copy deploy cache to revision directory' + Colors.END) from e
+                    '[!] Could not copy deploy cache to revision directory') from e
 
     def create_symlinks(self):
 
@@ -255,7 +268,7 @@ class Shipper(object):
             with open(self.symlinks, 'r') as fh:
                 symlink_data = json.load(fh)
         except json.JSONDecodeError as e:
-            raise ShipperError(Colors.RED + '[!] Failed reading json data: {0}'.format(repr(e)) + Colors.END) from e
+            raise ShipperError('[!] Failed reading json data: {0}'.format(repr(e))) from e
 
         if symlink_data is None:
             return
@@ -271,64 +284,24 @@ class Shipper(object):
                 Log.error('[!] Could not create symlink {0} -> {1}'.format(source, target))
                 raise ShipperError(repr(e)) from e
 
-    def get_plugin_instruction(self):
-        if self.plugin_instruction is None:
-            try:
-                with open(self.plugin_path, 'r') as plugin_file:
-                    self.plugin_instruction = json.load(plugin_file)
-                    return self.plugin_instruction
-            except (ValueError, json.JSONDecodeError) as e:
-                raise ShipperError(repr(e)) from e
-
-        return self.plugin_instruction
-
-    def dispatch_event(self, event_name):
-
-        if self.plugin_path is None:
-            return
-
-        instruction = self.get_plugin_instruction()
-
-        if event_name in instruction['action']:
-            for execute in instruction['action'][event_name]['execute']:
-
-                module_name = execute.split('.')
-                function_name = module_name[-1]
-                class_name = module_name[-2]
-                module_name = '.'.join(module_name[:-2])
-                try:
-                    module_object = import_module(module_name)
-                except ModuleNotFoundError as e:
-                    Log.error('[!] No such module was found: {0}'.format(module_name))
-                    raise ShipperError() from e
-
-                try:
-                    class_object = getattr(module_object, class_name)(self)
-                    function_object = getattr(class_object, function_name)
-                except AttributeError as e:
-                    raise ShipperError() from e
-
-                function_object()
-
     def create_symlink(self, target, link):
 
-        print(Colors.WHITE + 'Creating symlink for {0} -> {1}'.format(link, target) + Colors.END)
+        Log.info('Creating symlink for {0} -> {1}'.format(link, target))
 
         if self._link_exists(link):
-            print(Colors.ORANGE + '[!] Target {0} is symlink already. deleting.. '.format(link) + Colors.END, end='')
+            Log.warning('[!] Target {0} is symlink already. deleting.. '.format(link))
             with self._get_connection() as c:
                 c.run('unlink {0}'.format(link))
             Log.success('done')
 
         try:
             if files.exists(link):
-                print(Colors.ORANGE + '[!] Target {0} is file already. deleting.. '.format(link) + Colors.END, end='')
+                Log.warning('[!] Target {0} is file already. deleting.. '.format(link))
                 with self._get_connection() as c:
                     c.run('rm -f {0}'.format(link))
                 Log.success('done')
             if self._dir_exists(link):
-                print(Colors.ORANGE + '[!] Target {0} is directory already. deleting..'.format(link) + Colors.END,
-                      end='')
+                Log.warning('[!] Target {0} is directory already. deleting..'.format(link))
                 with self._get_connection() as c:
                     c.run('rm -rf {0}'.format(link))
 
@@ -357,7 +330,7 @@ class Shipper(object):
             if no_of_revisions > self.revisions_to_keep:
                 for v in date_sorted[:loop_count]:
                     try:
-                        print(Colors.WHITE + '└ Deleting {0} '.format(v) + Colors.END, end='')
+                        Log.info('└ Deleting {0} '.format(v))
                         if os.path.isdir(v) is True:
                             shutil.rmtree(v)
                             Log.success('done')
@@ -371,9 +344,65 @@ class Shipper(object):
         self.create_symlink(self.revision_path, os.path.join(self.deploy_dir, 'current'))
 
 
+class Event(object):
+
+    events_dispatched = []
+    event_data: dict = None
+    shipper = None
+
+    last_event: str = None
+
+    def __init__(self, plugin_path: str, shipper: Shipper):
+        self.shipper = shipper
+        self.event_data = self._init_event_data(plugin_path)
+
+    @staticmethod
+    def _init_event_data(plugin_path: str):
+        try:
+            with open(plugin_path, 'r') as plugin_file:
+                event_data = json.load(plugin_file)
+                return event_data
+        except (ValueError, json.JSONDecodeError) as e:
+            raise ShipperError(repr(e)) from e
+
+    def _register_event_dispatch(self, event_name: str):
+        self.events_dispatched.append(event_name)
+        self.last_event = event_name
+
+    def dispatch(self, event_name: str):
+        self._register_event_dispatch(event_name)
+
+    def dispatch_event(self, event_name):
+
+        if event_name not in self.event_data['action']:
+            return
+
+        for execute in self.event_data['action'][event_name]['execute']:
+
+            # @todo: redo this parsing
+            module_name = execute.split('.')
+            function_name = module_name[-1]
+            class_name = module_name[-2]
+            module_name = '.'.join(module_name[:-2])
+            try:
+                module_object = import_module(module_name)
+            except ModuleNotFoundError as e:
+                Log.error('[!] No such module was found: {0}'.format(module_name))
+                raise ShipperError() from e
+
+            try:
+                class_object = getattr(module_object, class_name)(self)
+                function_object = getattr(class_object, function_name)
+            except AttributeError as e:
+                raise ShipperError() from e
+
+            function_object()
+
+
 deployer = Shipper(
+    host=args.host,
+    user=args.user,
     plugin_path=args.plugin_file,
-    plugin_json=args.plugin_json,
     deploy_dir=args.deploy_dir,
     source_dir=args.sourcedir,
     revision=args.revision,
