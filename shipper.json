@@ -1,0 +1,21 @@
+{
+  "events": {
+    "before:init_directories": [
+      "module.Class.function_one",
+      "module.Class.function_two"
+    ]
+  },
+  "config": {
+    "base_dir": "/var/www/",
+    "source_dir": "/var/www/source",
+    "revision": "rev",
+    "revisions_to_keep": 5,
+    "directories": {
+      "revisions": "/var/www/revisions",
+      "share": "/var/www/share"
+    }
+  },
+  "symlinks": {
+    "sitemap": "pub/sitemap"
+  }
+}

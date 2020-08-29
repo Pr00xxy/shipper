@@ -1,9 +1,2 @@
-**/.vscode
-**/plugin.json
-**/__pycache__
-**/revisions/
-**/cache/
-**/share/
-**/current
-**/plugin/
-**/symlinks.json
+venv
+.idea
