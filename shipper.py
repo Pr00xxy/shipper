@@ -58,7 +58,7 @@ class Log(object):
         print(C.GREEN + text + C.END)
 
     @staticmethod
-    def warning(text: str):
+    def warn(text: str):
         print(C.ORANGE + text + C.END)
 
     @staticmethod
@@ -231,19 +231,19 @@ class Shipper(object):
         Log.info('Creating symlink for {0} -> {1}'.format(link, target))
 
         if self._link_exists(link):
-            Log.warning('[!] Target {0} is symlink already. deleting.. '.format(link))
+            Log.warn('[!] Target {0} is symlink already. deleting.. '.format(link))
             with self._get_connection() as c:
                 c.run('unlink {0}'.format(link))
             Log.success('done')
 
         try:
             if files.exists(link):
-                Log.warning('[!] Target {0} is file already. deleting.. '.format(link))
+                Log.warn('[!] Target {0} is file already. deleting.. '.format(link))
                 with self._get_connection() as c:
                     c.run('rm -f {0}'.format(link))
                 Log.success('done')
             if self._dir_exists(link):
-                Log.warning('[!] Target {0} is directory already. deleting..'.format(link))
+                Log.warn('[!] Target {0} is directory already. deleting..'.format(link))
                 with self._get_connection() as c:
                     c.run('rm -rf {0}'.format(link))
 
@@ -283,7 +283,7 @@ class Shipper(object):
                             Log.error('[!] Failed deleting {0}. not a directory'.format(v))
 
                     except (NotADirectoryError, OSError) as e:
-                        Log.warning(repr(e))
+                        Log.warn(repr(e))
 
     def link_current_revision(self):
         self.create_symlink(self.revision_path, os.path.join(self.deploy_dir, 'current'))
