@@ -87,7 +87,9 @@ class Shipper(object):
 
         if self.connection is None:
             self.connection = fabric.Connection(
-
+                host=self.cfg('config.target.host'),
+                user=self.cfg('config.target.user'),
+                port=self.cfg('config.target.port')
             )
 
         return self.connection
