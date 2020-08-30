@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-# Shipper
-
 from argparse import ArgumentParser
 import os
 import shutil
@@ -16,8 +14,6 @@ from patchwork import files
 from invoke.exceptions import UnexpectedExit
 
 parser = ArgumentParser(description='description')
-
-# parser._action_groups.pop()
 
 required = parser.add_argument_group('required arguments')
 
@@ -307,15 +303,17 @@ class Event(object):
     def dispatch(self, event_name: str):
         self._register_event_dispatch(event_name)
 
-        if event_name not in self.event_data['action']:
+        if event_name not in self.event_data:
             return
 
-        for execute in self.event_data['action'][event_name]['execute']:
+        for execute in self.event_data[event_name]:
 
-            module_name = execute.split('.')
-            function_name = module_name[-1]
-            class_name = module_name[-2]
-            module_name = '.'.join(module_name[:-2])
+            module_parts = execute.split('.')
+
+            function_name = module_parts[-1]
+            class_name = module_parts[-2]
+
+            module_name = '.'.join(module_parts[:-2])
 
             try:
                 module_object = import_module(module_name)
