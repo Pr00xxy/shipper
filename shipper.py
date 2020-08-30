@@ -121,7 +121,7 @@ class Shipper(object):
 
             event.dispatch('before:link_current_revision')
             Log.notice('Switching over to latest revision')
-            self.link_current_revision()
+            self.link_current_revision(revision_dir)
 
             event.dispatch('before:purge_old_revisions')
             Log.notice('Purging old revisions')
@@ -283,8 +283,9 @@ class Shipper(object):
                     except (NotADirectoryError, OSError) as e:
                         Log.warn(repr(e))
 
-    def link_current_revision(self):
-        self.create_symlink(self.revision_path, os.path.join(self.deploy_dir, 'current'))
+    def link_current_revision(self, revision_path: str):
+        active_symlink = self.cfg('config.active_symlink')
+        self.create_symlink(revision_path, active_symlink)
 
 
 class Event(object):
