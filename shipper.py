@@ -84,15 +84,17 @@ class Shipper(object):
         self.cfg = Cfg(config)
 
     def _get_connection(self):
-
-        if self.connection is None:
-            self.connection = fabric.Connection(
+        if not self.connection:
+            return Conn(
                 host=self.cfg('config.target.host'),
-                user=self.cfg('config.target.user'),
-                port=self.cfg('config.target.port')
+                user=self.cfg('config.target.user')
             )
 
         return self.connection
+
+    def _exec(self, cmd: str):
+        with self._get_connection() as c:
+            return c.run(cmd, warn=True)
 
     def run(self):
 
@@ -137,30 +139,33 @@ class Shipper(object):
         sys.exit(0)
 
     def _create_directory(self, directory: str):
-        with self._get_connection() as c:
-            try:
-                c.run('mkdir {}'.format(directory))
-                Log.success('success')
-            except UnexpectedExit as e:
+        try:
+            print(C.ORANGE + 'Creating new directory {} ... '.format(directory) + C.END, end='')
+            rc = self._exec('mkdir {}'.format(directory))
+            if not rc:
                 Log.error('failed')
-                raise ShipperError(C.RED + 'failed creating {0} {1}'.format(directory, repr(e)) + C.END) from e
+                raise ShipperError('Could not create directory {}'.format(directory))
+            Log.success('success')
+        except UnexpectedExit as e:
+            raise ShipperError() from e
 
     def _dir_exists(self, directory: str):
-        with self._get_connection() as c:
-            cmd = 'test -d "$(echo {})"'.format(directory)
-            c.run(cmd)
+        cmd = 'test -d {0}'.format(directory)
+        self._exec(cmd)
 
     def _link_exists(self, file: str):
-        with self._get_connection() as c:
-            cmd = 'test -L "$(echo {})"'.format(file)
-            c.run(cmd)
+        cmd = 'test -L {0}'.format(file)
+        self._exec(cmd)
 
     def _test_write_to_dir(self, directory: str):
-        with self._get_connection() as c:
-            if not c.run('touch {0}/test.file && rm -f {0}/test.file'.format(directory)):
+        try:
+            has_w_access = self._exec('touch {0}/test.file && rm -f {0}/test.file'.format(directory))
+            if not has_w_access:
                 raise ShipperError(C.RED + '[!] directory {0} is not writable'.format(directory) + C.END)
+        except UnexpectedExit as e:
+            raise ShipperError() from e
 
-            return True
+        return True
 
     def init_directories(self):
 
@@ -173,10 +178,13 @@ class Shipper(object):
         self._test_write_to_dir(deploy_dir)
 
         for name, path in dirs_to_create.items():
-            if not files.exists(path):
-                print(C.ORANGE + '[!] {0} missing. Trying to create... '.format(path) + C.END, end='')
-
-            self._create_directory('{0}/{1}'.format(deploy_dir, path))
+            try:
+                dir_exists = self._exec('test -d {}'.format(path))
+                if not dir_exists:
+                    print(C.ORANGE + '[!] {0} missing. Trying to create... '.format(path) + C.END, end='')
+                    self._create_directory('{}'.format(path))
+            except UnexpectedExit as e:
+                raise ShipperError() from e
 
     def create_revision_dir(self):
 
@@ -200,8 +208,7 @@ class Shipper(object):
         if self._dir_exists(source_dir):
             try:
                 Log.notice('Copying deploy cache to revision directory')
-                with self._get_connection() as c:
-                    c.run('cp -r {0}/. {1}/'.format(source_dir, revision_dir))
+                self._exec('cp -r {0}/. {1}/'.format(source_dir, revision_dir))
             except UnexpectedExit as e:
                 raise ShipperError(
                     '[!] Could not copy deploy cache to revision directory') from e
@@ -230,20 +237,17 @@ class Shipper(object):
 
         if self._link_exists(link):
             Log.warn('[!] Target {0} is symlink already. deleting.. '.format(link))
-            with self._get_connection() as c:
-                c.run('unlink {0}'.format(link))
+            self._exec('unlink {0}'.format(link))
             Log.success('done')
 
         try:
             if files.exists(link):
                 Log.warn('[!] Target {0} is file already. deleting.. '.format(link))
-                with self._get_connection() as c:
-                    c.run('rm -f {0}'.format(link))
+                self._exec('rm -f {0}'.format(link))
                 Log.success('done')
             if self._dir_exists(link):
                 Log.warn('[!] Target {0} is directory already. deleting..'.format(link))
-                with self._get_connection() as c:
-                    c.run('rm -rf {0}'.format(link))
+                self._exec('rm -rf {0}'.format(link))
 
                 Log.success('done')
 
