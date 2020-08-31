@@ -250,7 +250,7 @@ class Shipper(object):
             Log.success('done')
 
         try:
-            if files.exists(link):
+            if self._file_exists(link):
                 Log.warn('[!] Target {0} is file already. deleting.. '.format(link))
                 self._exec('rm -f {0}'.format(link))
                 Log.success('done')
@@ -260,16 +260,17 @@ class Shipper(object):
 
                 Log.success('done')
 
-            with self._get_connection() as c:
-                c.run('ln -s {0} {1}'.format(target, link))
+            self._exec('ln -s {0} {1}'.format(target, link))
 
         except UnexpectedExit as e:
-            Log.error('failed')
-            Log.error('[!] Could not create symlink {0} -> {1}'.format(target, link))
-            raise ShipperError() from e
+            if self.cfg('config.fail_on_symlink_error') is True:
+                Log.error('[!] Could not create symlink {0} -> {1}'.format(target, link))
+                raise ShipperError() from e
 
     def purge_old_revisions(self):
 
+
+        # TODO: find the oldest dir find . -maxdepth 1 -type d -printf '%T@\t%p\n' | sort -r | tail -n 2 | sed 's/[0-9]*\.[0-9]*\t//'
         revisions_to_keep = self.cfg('config.revisions_to_keep')
         revisions_dir = self.cfg('config.directories.revisions')
 
@@ -298,7 +299,7 @@ class Shipper(object):
 
     def link_current_revision(self, revision_path: str):
         active_symlink = self.cfg('config.active_symlink')
-        self.create_symlink(revision_path, active_symlink)
+        self._exec('ln -sf {0} {1}'.format(revision_path, active_symlink))
 
 
 class Event(object):
