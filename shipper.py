@@ -6,6 +6,7 @@ import shutil
 from importlib import import_module
 import pkg_resources
 import sys
+import time
 
 pkg_resources.require('fabric==2.5')
 import fabric
@@ -85,7 +86,7 @@ class Shipper(object):
 
     def _get_connection(self):
         if not self.connection:
-            return Conn(
+            return fabric.Connection(
                 host=self.cfg('config.target.host'),
                 user=self.cfg('config.target.user')
             )
@@ -153,6 +154,10 @@ class Shipper(object):
         cmd = 'test -d {0}'.format(directory)
         self._exec(cmd)
 
+    def _file_exists(self, file: str):
+        cmd = 'test -f {0}'.format(file)
+        self._exec(cmd)
+
     def _link_exists(self, file: str):
         cmd = 'test -L {0}'.format(file)
         self._exec(cmd)
@@ -193,13 +198,17 @@ class Shipper(object):
         revision_path = os.path.join(revisions_dir, self.cfg('config.revision'))
 
         try:
+            rev_exists = self._exec('test -d {}'.format(revision_path))
+            if rev_exists:
+                revision_path = revision_path + '-' + str(round(time.time()))
+
             self._create_directory(revision_path)
             self._test_write_to_dir(revision_path)
         except ShipperError as e:
             Log.error('[!] Could not create revision directory: {0}'.format(revision_path))
             raise e
 
-        return revisions_dir
+        return revision_path
 
     def copy_source_to_revision(self, revision_dir: str):
 
