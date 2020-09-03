@@ -2,16 +2,13 @@
 
 from argparse import ArgumentParser
 import os
-import shutil
 from importlib import import_module
 import pkg_resources
 import sys
 import time
-
 pkg_resources.require('fabric==2.5')
 import fabric
 import config
-from patchwork import files
 from invoke.exceptions import UnexpectedExit
 
 parser = ArgumentParser(description='description')
@@ -84,7 +81,7 @@ class Shipper(object):
     def __init__(self, config: str):
         self.cfg = Cfg(config)
 
-    def _get_connection(self):
+    def get_connection(self):
         if not self.connection:
             return fabric.Connection(
                 host=self.cfg('config.target.host'),
@@ -93,8 +90,8 @@ class Shipper(object):
 
         return self.connection
 
-    def _exec(self, cmd: str):
-        with self._get_connection() as c:
+    def exec(self, cmd: str):
+        with self.get_connection() as c:
             return c.run(cmd, warn=True)
 
     def run(self):
@@ -139,10 +136,10 @@ class Shipper(object):
 
         sys.exit(0)
 
-    def _create_directory(self, directory: str):
+    def create_directory(self, directory: str):
         try:
             print(C.ORANGE + 'Creating new directory {} ... '.format(directory) + C.END, end='')
-            rc = self._exec('mkdir {}'.format(directory))
+            rc = self.exec('mkdir {}'.format(directory))
             if not rc:
                 Log.error('failed')
                 raise ShipperError('Could not create directory {}'.format(directory))
@@ -150,21 +147,21 @@ class Shipper(object):
         except UnexpectedExit as e:
             raise ShipperError() from e
 
-    def _dir_exists(self, directory: str):
+    def dir_exists(self, directory: str):
         cmd = 'test -d {0}'.format(directory)
-        self._exec(cmd)
+        self.exec(cmd)
 
-    def _file_exists(self, file: str):
+    def file_exists(self, file: str):
         cmd = 'test -f {0}'.format(file)
-        self._exec(cmd)
+        self.exec(cmd)
 
-    def _link_exists(self, file: str):
+    def link_exists(self, file: str):
         cmd = 'test -L {0}'.format(file)
-        self._exec(cmd)
+        self.exec(cmd)
 
-    def _test_write_to_dir(self, directory: str):
+    def test_write_to_dir(self, directory: str):
         try:
-            has_w_access = self._exec('touch {0}/test.file && rm -f {0}/test.file'.format(directory))
+            has_w_access = self.exec('touch {0}/test.file && rm -f {0}/test.file'.format(directory))
             if not has_w_access:
                 raise ShipperError(C.RED + '[!] directory {0} is not writable'.format(directory) + C.END)
         except UnexpectedExit as e:
@@ -177,17 +174,17 @@ class Shipper(object):
         deploy_dir = self.cfg('config.base_dir')
         dirs_to_create = self.cfg('config.directories').as_dict()
 
-        if self._dir_exists(deploy_dir):
+        if self.dir_exists(deploy_dir):
             raise ShipperError(C.ORANGE + '[!] Deployment directory does not exist.' + C.END)
 
-        self._test_write_to_dir(deploy_dir)
+        self.test_write_to_dir(deploy_dir)
 
         for name, path in dirs_to_create.items():
             try:
-                dir_exists = self._exec('test -d {}'.format(path))
+                dir_exists = self.exec('test -d {}'.format(path))
                 if not dir_exists:
                     print(C.ORANGE + '[!] {0} missing. Trying to create... '.format(path) + C.END, end='')
-                    self._create_directory('{}'.format(path))
+                    self.create_directory(path)
             except UnexpectedExit as e:
                 raise ShipperError() from e
 
@@ -198,12 +195,12 @@ class Shipper(object):
         revision_path = os.path.join(revisions_dir, self.cfg('config.revision'))
 
         try:
-            rev_exists = self._exec('test -d {}'.format(revision_path))
+            rev_exists = self.exec('test -d {}'.format(revision_path))
             if rev_exists:
                 revision_path = revision_path + '-' + str(round(time.time()))
 
-            self._create_directory(revision_path)
-            self._test_write_to_dir(revision_path)
+            self.create_directory(revision_path)
+            self.test_write_to_dir(revision_path)
         except ShipperError as e:
             Log.error('[!] Could not create revision directory: {0}'.format(revision_path))
             raise e
@@ -214,10 +211,10 @@ class Shipper(object):
 
         source_dir = self.cfg('config.source_dir')
 
-        if self._dir_exists(source_dir):
+        if self.dir_exists(source_dir):
             try:
                 Log.notice('Copying deploy cache to revision directory')
-                self._exec('cp -r {0}/. {1}/'.format(source_dir, revision_dir))
+                self.exec('cp -r {0}/. {1}/'.format(source_dir, revision_dir))
             except UnexpectedExit as e:
                 raise ShipperError(
                     '[!] Could not copy deploy cache to revision directory') from e
@@ -244,23 +241,23 @@ class Shipper(object):
 
         Log.info('Creating symlink for {0} -> {1}'.format(link, target))
 
-        if self._link_exists(link):
+        if self.link_exists(link):
             Log.warn('[!] Target {0} is symlink already. deleting.. '.format(link))
-            self._exec('unlink {0}'.format(link))
+            self.exec('unlink {0}'.format(link))
             Log.success('done')
 
         try:
-            if self._file_exists(link):
+            if self.file_exists(link):
                 Log.warn('[!] Target {0} is file already. deleting.. '.format(link))
-                self._exec('rm -f {0}'.format(link))
+                self.exec('rm -f {0}'.format(link))
                 Log.success('done')
-            if self._dir_exists(link):
+            if self.dir_exists(link):
                 Log.warn('[!] Target {0} is directory already. deleting..'.format(link))
-                self._exec('rm -rf {0}'.format(link))
+                self.exec('rm -rf {0}'.format(link))
 
                 Log.success('done')
 
-            self._exec('ln -s {0} {1}'.format(target, link))
+            self.exec('ln -s {0} {1}'.format(target, link))
 
         except UnexpectedExit as e:
             if self.cfg('config.fail_on_symlink_error') is True:
@@ -268,38 +265,15 @@ class Shipper(object):
                 raise ShipperError() from e
 
     def purge_old_revisions(self):
-
-
-        # TODO: find the oldest dir find . -maxdepth 1 -type d -printf '%T@\t%p\n' | sort -r | tail -n 2 | sed 's/[0-9]*\.[0-9]*\t//'
-        revisions_to_keep = self.cfg('config.revisions_to_keep')
-        revisions_dir = self.cfg('config.directories.revisions')
-
-        if revisions_to_keep > 0:
-            no_of_revisions = len(revisions_dir)
-
-            date_sorted = sorted([os.path.join(revisions_dir, i)
-                                  for i in os.listdir(revisions_dir)],
-                                 key=os.path.getmtime
-                                 )
-
-            loop_count = no_of_revisions - revisions_to_keep
-
-            if no_of_revisions > revisions_to_keep:
-                for v in date_sorted[:loop_count]:
-                    try:
-                        Log.info('└ Deleting {0} '.format(v))
-                        if os.path.isdir(v):
-                            shutil.rmtree(v)
-                            Log.success('done')
-                        else:
-                            Log.error('[!] Failed deleting {0}. not a directory'.format(v))
-
-                    except (NotADirectoryError, OSError) as e:
-                        Log.warn(repr(e))
+        # @todo implement this
+        pass
 
     def link_current_revision(self, revision_path: str):
         active_symlink = self.cfg('config.active_symlink')
-        self._exec('ln -sf {0} {1}'.format(revision_path, active_symlink))
+        try:
+            self.exec('ln -snf {0} {1}'.format(revision_path, active_symlink))
+        except UnexpectedExit as e:
+            raise ShipperError() from e
 
 
 class Event(object):
