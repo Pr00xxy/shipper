@@ -1,0 +1,21 @@
+{
+  "events": {},
+  "config": {
+    "base_dir": "/var/www",
+    "source_dir": "/var/www/source",
+    "active_symlink": "/var/www/current",
+    "revision": "rev",
+    "revisions_to_keep": 5,
+    "fail_on_symlink_error": false,
+    "directories": {
+      "revisions": "/var/www/revisions",
+      "share": "/var/www/share"
+    },
+    "target": {
+      "host": "",
+      "user": "",
+      "port": ""
+    }
+  },
+  "symlinks": {}
+}
