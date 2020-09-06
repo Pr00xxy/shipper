@@ -44,7 +44,11 @@ class ShipperError(Exception):
     pass
 
 
-class C(object):
+class Log(object):
+    """
+    Helper class for outputting pretty colours
+    """
+
     BLUE = '\x1b[0;34m'
     GREEN = '\x1b[0;32m'
     RED = '\x1b[0;31m'
@@ -52,31 +56,25 @@ class C(object):
     WHITE = '\x1b[0;97m'
     END = '\033[0;0m'
 
-
-class Log(object):
-    """
-    Helper class for outputting pretty colours
-    """
-
     @staticmethod
     def error(text: str):
-        print(C.RED + text + C.END)
+        print(Log.RED + text + Log.END)
 
     @staticmethod
     def info(text: str):
-        print(C.BLUE + text + C.END)
+        print(Log.BLUE + text + Log.END)
 
     @staticmethod
     def success(text: str):
-        print(C.GREEN + text + C.END)
+        print(Log.GREEN + text + Log.END)
 
     @staticmethod
     def warn(text: str):
-        print(C.ORANGE + text + C.END)
+        print(Log.ORANGE + text + Log.END)
 
     @staticmethod
     def notice(text: str):
-        print(C.BLUE + text + C.END)
+        print(Log.BLUE + text + Log.END)
 
 
 class Cfg(object):
@@ -159,12 +157,10 @@ class Shipper(object):
 
     def create_directory(self, directory: str):
         try:
-            print(C.ORANGE + 'Creating new directory {} ... '.format(directory) + C.END, end='')
+            Log.info('Creating new directory {} ... '.format(directory))
             rc = self.exec('mkdir {}'.format(directory))
             if rc.failed:
-                Log.error('failed')
                 raise ShipperError('Could not create directory {}'.format(directory))
-            Log.success('success')
         except UnexpectedExit as e:
             raise ShipperError() from e
 
@@ -193,7 +189,7 @@ class Shipper(object):
         dirs_to_create = self.cfg('config.directories').as_dict()
 
         if not self.can_write_to_dirs(deploy_dir):
-            raise ShipperError(C.ORANGE + '[!] Deployment directory does not exist or cannot be written to' + C.END)
+            raise ShipperError('[!] Deployment directory does not exist or cannot be written to')
 
         for name, path in dirs_to_create.items():
             try:
