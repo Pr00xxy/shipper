@@ -146,7 +146,8 @@ class Shipper(object):
             self.purge_old_revisions()
 
             event.dispatch('before:completion')
-            Log.success('Done.')
+
+            Log.success('Deployment Completed.')
 
         except ShipperError:
             event.dispatch('on:error')
