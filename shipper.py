@@ -62,7 +62,7 @@ class Log(object):
 
     @staticmethod
     def info(text: str):
-        print(Log.BLUE + text + Log.END)
+        print(Log.WHITE + text + Log.END)
 
     @staticmethod
     def success(text: str):
