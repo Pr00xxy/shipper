@@ -24,10 +24,20 @@ required.add_argument('--config',
 args = parser.parse_args()
 
 
+class Connection(fabric.Connection):
+
+    def __exit__(self, *exc):
+        """
+        Override parent function to allow us to use a single connection during the entire runtime
+        :param exc:
+        :return:
+        """
+        pass
+
+
 class ShipperError(Exception):
     """
     Core shipper exception.
-    Throwing this exception dispatches the special on:error events
     """
     pass
 
