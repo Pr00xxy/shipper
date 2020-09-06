@@ -135,8 +135,6 @@ class Shipper(object):
             Log.notice('Creating new revision directory..')
             revision_dir = self.create_revision_dir()
 
-            event.dispatch('on:inject_source_files')
-
             event.dispatch('before:create_symlinks')
             Log.notice('Creating symlinks within new revision directory..')
             self.create_symlinks(revision_dir)
@@ -250,16 +248,33 @@ class Shipper(object):
                 raise ShipperError(repr(e)) from e
 
     def create_symlink(self, source, target):
+        """
+        :param source: Absolute path to source
+        :param target: Absolute path to symlink
+        :return:
+        """
 
-        Log.info('Creating symlink for {0} -> {1}'.format(target, source))
-        fail_on_error = self.cfg('config.fail_on_symlink_error')
+        Log.info('Creating symlink for {0} -> {1}'.format(source, target))
 
-        self.exec('test -f {0} && rm -f {0}'.format(target))
-        self.exec('test -d {0} && rm -rf {0}'.format(target))
+        if self.link_exists(target):
+            Log.warn('[!] Target {0} is symlink already. deleting.. '.format(target))
+            self.exec('unlink {0}'.format(target))
 
-        result = self.exec('ln -s {0} {1}'.format(source, target))
-        if result.failed and fail_on_error:
-            raise ShipperError('[!] Could not create symlink {0} -> {1}'.format(source, target))
+        try:
+            if self.file_exists(target):
+                Log.warn('[!] Target {0} is file already. deleting.. '.format(target))
+                self.exec('rm -f {0}'.format(target))
+                Log.success('done')
+            if self.dir_exists(target):
+                Log.warn('[!] Target {0} is directory already. deleting..'.format(target))
+                self.exec('rm -rf {0}'.format(target))
+
+            self.exec('ln -s {0} {1}'.format(source, target))
+
+        except UnexpectedExit as e:
+            if self.cfg('config.fail_on_symlink_error') is True:
+                Log.error('[!] Could not create symlink {0} -> {1}'.format(source, target))
+                raise ShipperError() from e
 
     def purge_old_revisions(self):
         # @todo implement this
