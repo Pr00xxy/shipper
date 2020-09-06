@@ -215,17 +215,6 @@ class Shipper(object):
 
         return revision_path
 
-    def copy_source_to_revision(self, revision_dir: str):
-
-        source_dir = self.cfg('config.source_dir')
-
-        if self.dir_exists(source_dir):
-            try:
-                Log.notice('Copying deploy cache to revision directory')
-                self.exec('cp -r {0}/. {1}/'.format(source_dir, revision_dir))
-            except UnexpectedExit as e:
-                raise ShipperError('[!] Could not copy deploy cache to revision directory') from e
-
     def create_symlinks(self, revision_path: str):
 
         symlink_data = self.cfg('symlinks')
@@ -278,6 +267,12 @@ class Shipper(object):
         pass
 
     def link_current_revision(self, revision_path: str):
+        """
+        Move the active symlink to the provided path
+
+        :param revision_path:
+        :return:
+        """
         active_symlink = self.cfg('config.active_symlink')
         try:
             self.exec('ln -snf {0} {1}'.format(revision_path, active_symlink))
