@@ -6,10 +6,11 @@ from importlib import import_module
 import pkg_resources
 import sys
 import time
-pkg_resources.require('fabric==2.5')
 import fabric
 import config
 from invoke.exceptions import UnexpectedExit
+
+pkg_resources.require('fabric==2.5')
 
 parser = ArgumentParser(description='description')
 
@@ -38,6 +39,7 @@ class Connection(fabric.Connection):
 class ShipperError(Exception):
     """
     Core shipper exception.
+    Throwing this exception dispatches the special on:error events
     """
     pass
 
@@ -100,8 +102,8 @@ class Shipper(object):
         self.cfg = Cfg(config)
 
     def get_connection(self):
-        if not self.connection:
-            return fabric.Connection(
+        if self.connection is None:
+            self.connection = Connection(
                 host=self.cfg('config.target.host'),
                 user=self.cfg('config.target.user')
             )
@@ -116,10 +118,12 @@ class Shipper(object):
 
         event = Event(
             cfg=self.cfg,
-            shipper=self
+            context=self
         )
 
         try:
+
+            event.dispatch('on:start')
 
             self.current_revision = self.establish_current_link()
 
@@ -127,13 +131,11 @@ class Shipper(object):
             Log.notice('Creating atomic deployment directories..')
             self.init_directories()
 
-            event.dispatch('before:create_revision_dir')
+            event.dispatch('before:create_revision')
             Log.notice('Creating new revision directory..')
             revision_dir = self.create_revision_dir()
 
-            event.dispatch('before:copy_source_to_revision')
-            Log.notice('Copying source-dir to new revision directory..')
-            self.copy_source_to_revision(revision_dir)
+            event.dispatch('on:inject_source_files')
 
             event.dispatch('before:create_symlinks')
             Log.notice('Creating symlinks within new revision directory..')
@@ -152,6 +154,7 @@ class Shipper(object):
 
         except ShipperError:
             event.dispatch('on:error')
+            self.connection.close()
             sys.exit(1)
 
         sys.exit(0)
@@ -279,15 +282,24 @@ class Shipper(object):
 
 
 class Event(object):
+
     events_dispatched = []
-    event_data: dict = None
-    shipper = None
+    event_instructions: dict = None
 
     last_event: str = None
 
-    def __init__(self, cfg: Cfg, shipper: Shipper):
-        self.shipper = shipper
-        self.event_data = cfg('events')
+    def __init__(self, cfg: Cfg, context: Shipper):
+        self.context = context
+        try:
+            self.event_instructions = cfg('events')
+        except KeyError:
+            self.event_instructions = None
+
+    def get_dispatched_events(self):
+        return self.events_dispatched
+
+    def get_last_dispatched_event(self):
+        return self.get_dispatched_events()[-1]
 
     def _register_event_dispatch(self, event_name: str):
         self.events_dispatched.append(event_name)
@@ -296,10 +308,13 @@ class Event(object):
     def dispatch(self, event_name: str):
         self._register_event_dispatch(event_name)
 
-        if event_name not in self.event_data:
+        if self.event_instructions is None:
             return
 
-        for execute in self.event_data[event_name]:
+        if event_name not in self.event_instructions:
+            return
+
+        for execute in self.event_instructions[event_name]:
 
             module_parts = execute.split('.')
 
@@ -315,7 +330,7 @@ class Event(object):
                 raise ShipperError() from e
 
             try:
-                class_object = getattr(module_object, class_name)(self.shipper)
+                class_object = getattr(module_object, class_name)(self.context)
                 function_object = getattr(class_object, function_name)
             except AttributeError as e:
                 raise ShipperError() from e
