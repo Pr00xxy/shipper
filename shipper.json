@@ -1,21 +1,17 @@
 {
-  "events": {
-    "before:init_directories": [
-      "module.Class.function_one",
-      "module.Class.function_two"
-    ]
-  },
+  "events": {},
   "config": {
-    "base_dir": "/var/www/",
-    "source_dir": "/var/www/source",
     "revision": "rev",
     "revisions_to_keep": 5,
+    "fail_on_symlink_error": false,
+    "active_symlink": "/var/www/current",
     "directories": {
       "revisions": "/var/www/revisions",
-      "share": "/var/www/share"
+      "base_dir": "/var/www"
+    },
+    "target": {
+      "host": "Pi"
     }
   },
-  "symlinks": {
-    "sitemap": "pub/sitemap"
-  }
+  "symlinks": {}
 }
