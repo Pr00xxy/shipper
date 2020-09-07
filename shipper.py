@@ -102,8 +102,7 @@ class Shipper(object):
     def get_connection(self):
         if self.connection is None:
             self.connection = Connection(
-                host=self.cfg('config.target.host'),
-                user=self.cfg('config.target.user')
+                host=self.cfg('config.target.host')
             )
 
         return self.connection
@@ -123,7 +122,7 @@ class Shipper(object):
 
             event.dispatch('on:start')
 
-            self.current_revision = self.establish_current_link()
+            self.current_revision = self.get_active_symlink()
 
             event.dispatch('before:init_directories')
             Log.notice('Creating atomic deployment directories..')
@@ -186,7 +185,7 @@ class Shipper(object):
 
     def init_directories(self):
 
-        deploy_dir = self.cfg('config.base_dir')
+        deploy_dir = self.cfg('config.directories.base_dir')
         dirs_to_create = self.cfg('config.directories').as_dict()
 
         if not self.can_write_to_dirs(deploy_dir):
@@ -217,7 +216,11 @@ class Shipper(object):
 
     def create_symlinks(self, revision_path: str):
 
-        symlink_data = self.cfg('symlinks')
+        try:
+            symlink_data = self.cfg('symlinks')
+        except KeyError as e:
+            Log.warn('No symlinks to create')
+            return
 
         if symlink_data is None:
             return
@@ -279,7 +282,7 @@ class Shipper(object):
         except UnexpectedExit as e:
             raise ShipperError() from e
 
-    def establish_current_link(self):
+    def get_active_symlink(self):
         result = self.exec('test -L && readlink {}'.format(self.cfg('config.active_symlink')))
 
         if result.ok:
