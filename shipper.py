@@ -180,28 +180,46 @@ class Shipper(object):
     def create_directory(self, directory: str):
         try:
             Log.info('Creating new directory {} ... '.format(directory))
-            rc = self.exec('mkdir {}'.format(directory))
-            if rc.failed:
+            result = self.exec('mkdir {}'.format(directory))
+            if result.failed:
                 raise ShipperError('Could not create directory {}'.format(directory))
         except UnexpectedExit as e:
             raise ShipperError() from e
 
     def dir_exists(self, directory: str):
         cmd = 'test -d {0}'.format(directory)
-        return self.exec(cmd)
+        result = self.exec(cmd)
+        return result.ok
 
     def file_exists(self, file: str):
         cmd = 'test -f {0}'.format(file)
-        return self.exec(cmd)
+        result = self.exec(cmd)
+        return result.ok
 
     def link_exists(self, file: str):
         cmd = 'test -L {0}'.format(file)
-        return self.exec(cmd)
+        result = self.exec(cmd)
+        return result.ok
+
+    def remove_symlink(self, path: str):
+        result = self.exec('unlink {0}'.format(path))
+        return result
+
+    def remove_file(self, path: str):
+        cmd = 'rm -f {0}'.format(path)
+        result = self.exec(cmd)
+        return result
+
+    def remove_dir(self, path: str):
+        cmd = 'rm -r {0}'.format(path)
+        result = self.exec(cmd)
+        return result
 
     def can_write_to_dirs(self, *dirs: iter):
-        cmd = '-a -w'.join(dirs)
         try:
-            return self.exec('test -w {}'.format(cmd))
+            cmd = '-a -w'.join(dirs)
+            result = self.exec('test -w {}'.format(cmd))
+            return result.ok
         except UnexpectedExit as e:
             raise ShipperError() from e
 
@@ -269,18 +287,28 @@ class Shipper(object):
 
         if self.link_exists(target):
             Log.warn('[!] Target {0} is symlink already. deleting.. '.format(target))
-            self.exec('unlink {0}'.format(target))
+            result = self.remove_symlink(target)
+            if result.failed:
+                raise ShipperError('Could not remove existing symlink {}'.format(result.stdout))
 
         try:
+
             if self.file_exists(target):
                 Log.warn('[!] Target {0} is file already. deleting.. '.format(target))
-                self.exec('rm -f {0}'.format(target))
+                result = self.remove_file(target)
+                if result.failed:
+                    raise ShipperError('Could not remove existing file {}'.format(result.stdout))
                 Log.success('done')
+
             if self.dir_exists(target):
                 Log.warn('[!] Target {0} is directory already. deleting..'.format(target))
-                self.exec('rm -rf {0}'.format(target))
+                result = self.remove_dir(target)
+                if result.failed:
+                    raise ShipperError('Could not remove existing directory {}'.format(result.stdout))
 
-            self.exec('ln -s {0} {1}'.format(source, target))
+            result = self.exec('ln -s {0} {1}'.format(source, target))
+            if result.failed:
+                raise ShipperError('Could not create symlink {}'.format(result.stdout))
 
         except UnexpectedExit as e:
             if self.cfg('config.fail_on_symlink_error') is True:
