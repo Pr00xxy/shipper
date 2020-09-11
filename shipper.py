@@ -99,6 +99,7 @@ class Log(object):
 
 
 class Cfg(object):
+
     _prefix = 'SHIP_'
 
     def __init__(self, path: str):
@@ -299,7 +300,9 @@ class Shipper(object):
         """
         active_symlink = self.cfg('config.active_symlink')
         try:
-            self.exec('ln -snf {0} {1}'.format(revision_path, active_symlink))
+            result = self.exec('ln -snf {0} {1}'.format(revision_path, active_symlink))
+            if result.failed:
+                raise ShipperError('Could not switch active symlink to revision {}'.format(result.stdout))
         except UnexpectedExit as e:
             raise ShipperError() from e
 
