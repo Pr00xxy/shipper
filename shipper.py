@@ -60,6 +60,7 @@ class ShipperError(Exception):
     """
     Core shipper exception.
     Throwing this exception dispatches the special on:error events
+    Catching this error outside the Shipper.run() function is strictly forbidden
     """
     pass
 
