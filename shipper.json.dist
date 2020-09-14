@@ -7,7 +7,6 @@
     "active_symlink": "/var/www/current",
     "directories": {
       "revisions": "/var/www/revisions",
-      "base_dir": "/var/www"
     },
     "target": {
       "host": ""

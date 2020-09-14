@@ -225,7 +225,6 @@ class Shipper(object):
 
     def init_directories(self):
 
-        deploy_dir = self.cfg('config.directories.base_dir')
         dirs_to_create = self.cfg('config.directories').as_dict()
 
         if not self.can_write_to_dirs(deploy_dir):
